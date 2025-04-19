@@ -30,13 +30,44 @@ module.exports = {
         type: Sequelize.BOOLEAN,
         defaultValue: false,
       },
+      // Password management fields
+      password_updated_at: {
+        type: Sequelize.DATE,
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
+      },
+      password_history: {
+        type: Sequelize.JSON,
+        defaultValue: [],
+      },
+      // Account lockout fields
+      failed_login_attempts: {
+        type: Sequelize.INTEGER,
+        defaultValue: 0,
+      },
+      locked_until: {
+        type: Sequelize.DATE,
+        allowNull: true,
+      },
+      // Session management fields
+      last_login_at: {
+        type: Sequelize.DATE,
+        allowNull: true,
+      },
+      last_login_ip: {
+        type: Sequelize.STRING,
+        allowNull: true,
+      },
+      active_sessions: {
+        type: Sequelize.JSON,
+        defaultValue: [],
+      },
       created_at: {
         type: Sequelize.DATE,
-        defaultValue: {},
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
       },
       updated_at: {
         type: Sequelize.DATE,
-        defaultValue: {},
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
       },
     });
 

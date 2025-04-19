@@ -28,6 +28,26 @@ RefreshToken.init(
       type: DataTypes.DATE,
       allowNull: false,
     },
+    ip_address: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'IP address that created this token',
+    },
+    user_agent: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'User agent string for device tracking',
+    },
+    device_info: {
+      type: DataTypes.JSON,
+      defaultValue: {},
+      comment: 'Additional device information',
+    },
+    is_revoked: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'If the token has been explicitly revoked',
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -48,6 +68,10 @@ RefreshToken.init(
       {
         name: 'idx_refresh_tokens_token',
         fields: ['token'],
+      },
+      {
+        name: 'idx_refresh_tokens_is_revoked',
+        fields: ['is_revoked'],
       },
     ],
   }

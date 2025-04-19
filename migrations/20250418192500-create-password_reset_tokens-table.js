@@ -23,19 +23,17 @@ module.exports = {
         allowNull: false,
         unique: true,
       },
-      expires_at: {
-        type: Sequelize.DATE,
-        allowNull: false,
-      },
       created_at: {
         type: Sequelize.DATE,
-        defaultValue: {},
+        defaultValue: Sequelize.literal('CURRENT_TIMESTAMP'),
       },
     });
 
     // Add indexes
-    await queryInterface.addIndex('password_reset_tokens', ["user_id"], { name: 'idx_password_reset_tokens_user_id' });
-    await queryInterface.addIndex('password_reset_tokens', ["token"], { name: 'idx_password_reset_tokens_token' });
+    await queryInterface.addIndex('password_reset_tokens', ["user_id"], 
+      { name: 'idx_password_reset_tokens_user_id' });
+    await queryInterface.addIndex('password_reset_tokens', ["token"], 
+      { name: 'idx_password_reset_tokens_token' });
   },
 
   down: async (queryInterface, Sequelize) => {
