@@ -1,66 +1,71 @@
-const { DataTypes, Model } = require('sequelize');
-const { sequelize } = require('../../../shared/database');
+/**
+ * WebSocket connection model
+ */
+const { DataTypes } = require('sequelize');
+const sequelize = require('../../../shared/database').getSequelize();
 
-class WebSocketConnection extends Model {}
-
-WebSocketConnection.init(
+/**
+ * WebSocketConnection model
+ */
+const WebSocketConnection = sequelize.define(
+  'websocket_connection',
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
-      autoIncrement: true,
-    },
-    user_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'users',
-        key: 'id',
-      },
-      onDelete: 'CASCADE',
+      autoIncrement: true
     },
     connection_id: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.UUID,
       allowNull: false,
-      unique: true,
+      unique: true
     },
-    ip_address: {
+    user_id: {
+      type: DataTypes.UUID,
+      allowNull: false
+    },
+    client_ip: {
       type: DataTypes.STRING(45),
-      allowNull: true,
+      allowNull: true
     },
     user_agent: {
-      type: DataTypes.TEXT,
-      allowNull: true,
+      type: DataTypes.STRING(255),
+      allowNull: true
     },
     connected_at: {
       type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    last_heartbeat: {
-      type: DataTypes.DATE,
-      allowNull: true,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
     },
     disconnected_at: {
       type: DataTypes.DATE,
-      allowNull: true,
+      allowNull: true
     },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
+    },
+    metadata: {
+      type: DataTypes.JSONB,
+      allowNull: true
+    }
   },
   {
-    sequelize,
-    modelName: 'WebSocketConnection',
     tableName: 'websocket_connections',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
     indexes: [
       {
-        name: 'idx_websocket_connections_user_id',
-        fields: ['user_id'],
+        fields: ['user_id']
       },
       {
-        name: 'idx_websocket_connections_connection_id',
-        fields: ['connection_id'],
-        unique: true,
+        fields: ['connection_id']
       },
-    ],
+      {
+        fields: ['is_active']
+      }
+    ]
   }
 );
 

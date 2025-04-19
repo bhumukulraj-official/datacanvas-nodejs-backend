@@ -1,110 +1,70 @@
-const { DataTypes, Model } = require('sequelize');
-const { sequelize } = require('../../../shared/database');
+/**
+ * WebSocket message model
+ */
+const { DataTypes } = require('sequelize');
+const sequelize = require('../../../shared/database').getSequelize();
 
-class WebSocketMessage extends Model {}
-
-WebSocketMessage.init(
+/**
+ * WebSocketMessage model
+ */
+const WebSocketMessage = sequelize.define(
+  'websocket_message',
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
-      autoIncrement: true,
-    },
-    type: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      validate: {
-        isIn: [['notification', 'message', 'status', 'error']],
-      },
-    },
-    payload: {
-      type: DataTypes.JSONB,
-      allowNull: false,
-      defaultValue: {},
-    },
-    user_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'users',
-        key: 'id',
-      },
-      onDelete: 'CASCADE',
+      autoIncrement: true
     },
     connection_id: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.UUID,
+      allowNull: false
+    },
+    user_id: {
+      type: DataTypes.UUID,
+      allowNull: false
+    },
+    message_type: {
+      type: DataTypes.STRING(50),
+      allowNull: false
+    },
+    message_data: {
+      type: DataTypes.JSONB,
+      allowNull: true
+    },
+    created_at: {
+      type: DataTypes.DATE,
       allowNull: false,
-      references: {
-        model: 'websocket_connections',
-        key: 'connection_id',
-      },
-      onDelete: 'CASCADE',
+      defaultValue: DataTypes.NOW
     },
-    message_id: {
-      type: DataTypes.STRING(255),
+    is_processed: {
+      type: DataTypes.BOOLEAN,
       allowNull: false,
-      unique: true,
+      defaultValue: false
     },
-    sent_at: {
+    processed_at: {
       type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-    delivered_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    read_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    delivery_status: {
-      type: DataTypes.STRING(20),
-      defaultValue: 'pending',
-      validate: {
-        isIn: [['pending', 'sent', 'delivered', 'read', 'failed']],
-      },
-    },
-    retry_count: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0,
-    },
-    last_retry_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    error_message: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-    },
+      allowNull: true
+    }
   },
   {
-    sequelize,
-    modelName: 'WebSocketMessage',
     tableName: 'websocket_messages',
-    timestamps: false,
+    timestamps: true,
+    updatedAt: false,
+    underscored: true,
     indexes: [
       {
-        name: 'idx_websocket_messages_user_id',
-        fields: ['user_id'],
+        fields: ['user_id']
       },
       {
-        name: 'idx_websocket_messages_connection_id',
-        fields: ['connection_id'],
+        fields: ['connection_id']
       },
       {
-        name: 'idx_websocket_messages_message_id',
-        fields: ['message_id'],
-        unique: true,
+        fields: ['message_type']
       },
       {
-        name: 'idx_websocket_messages_type',
-        fields: ['type'],
-      },
-      {
-        name: 'idx_websocket_messages_delivery_status',
-        fields: ['delivery_status'],
-      },
-    ],
+        fields: ['created_at']
+      }
+    ]
   }
 );
 
