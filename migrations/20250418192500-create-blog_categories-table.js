@@ -4,34 +4,38 @@ module.exports = {
   up: async (queryInterface, Sequelize) => {
     await queryInterface.createTable('blog_categories', {
       id: {
-        type: Sequelize.INTEGER,
-        primaryKey: true,
-        autoIncrement: true,
+        type: Sequelize.UUID,
+        defaultValue: Sequelize.UUIDV4,
+        primaryKey: true
       },
       name: {
-        type: Sequelize.STRING,
-        allowNull: false,
+        type: Sequelize.STRING(100),
+        allowNull: false
       },
       slug: {
-        type: Sequelize.STRING,
+        type: Sequelize.STRING(100),
         allowNull: false,
-        unique: true,
+        unique: true
       },
       description: {
         type: Sequelize.TEXT,
+        allowNull: true
       },
       created_at: {
         type: Sequelize.DATE,
-        defaultValue: {},
+        allowNull: false
       },
       updated_at: {
         type: Sequelize.DATE,
-        defaultValue: {},
-      },
+        allowNull: false
+      }
     });
 
     // Add indexes
-    await queryInterface.addIndex('blog_categories', ["slug"], { name: 'idx_blog_categories_slug', unique: true });
+    await queryInterface.addIndex('blog_categories', ['slug'], {
+      name: 'blog_categories_slug_idx',
+      unique: true
+    });
   },
 
   down: async (queryInterface, Sequelize) => {

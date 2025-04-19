@@ -5,12 +5,14 @@ const router = express.Router();
 const authRoutes = require('../../../modules/auth/routes/auth.routes');
 const profileRoutes = require('../../../modules/profile/routes');
 const projectRoutes = require('../../../modules/projects/routes');
+const blogRoutes = require('../../../modules/blog/routes');
 // Import other route modules as needed
 
 // Register routes
 router.use('/auth', authRoutes);
 router.use('/profile', profileRoutes);
 router.use('/projects', projectRoutes);
+router.use('/blog', blogRoutes);
 // Register other routes as needed
 
 // API Health check
@@ -22,9 +24,9 @@ router.get('/health', (req, res) => {
   });
 });
 
-// Admin project routes
-// The same controller is used but with authentication
+// Admin routes
 router.use('/admin/projects', projectRoutes);
+router.use('/admin/blog', blogRoutes);
 
 // Catch-all route for undefined endpoints
 router.all('*', (req, res) => {
