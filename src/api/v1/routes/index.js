@@ -3,10 +3,12 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require('../../../modules/auth/routes/auth.routes');
+const profileRoutes = require('../../../modules/profile/routes');
 // Import other route modules as needed
 
 // Register routes
 router.use('/auth', authRoutes);
+router.use('/profile', profileRoutes);
 // Register other routes as needed
 
 // Catch-all route for undefined endpoints
