@@ -1,7 +1,12 @@
+/**
+ * Cache utility for Redis-based caching
+ * Provides methods for get/set/del operations and a wrapper for service methods
+ */
 const redis = require('../config/redis');
 const logger = require('./logger');
 
-const DEFAULT_TTL = 3600; // 1 hour in seconds
+// Default TTL for cache items (1 hour)
+const DEFAULT_TTL = 3600;
 
 /**
  * Get data from cache
@@ -56,10 +61,28 @@ exports.delByPattern = async (pattern) => {
     const keys = await redis.keys(pattern);
     if (keys.length) {
       await redis.del(keys);
+      logger.debug(`Deleted ${keys.length} keys matching pattern: ${pattern}`);
     }
   } catch (error) {
     logger.error(`Error deleting data from cache by pattern: ${error.message}`, { pattern });
   }
+};
+
+/**
+ * Generate cache key from prefix and arguments
+ * @param {string} prefix Key prefix
+ * @param {...any} args Arguments to include in key
+ * @returns {string} Generated cache key
+ */
+exports.generateKey = (prefix, ...args) => {
+  const argString = args.map(arg => {
+    if (typeof arg === 'object') {
+      return JSON.stringify(arg);
+    }
+    return String(arg);
+  }).join(':');
+  
+  return `${prefix}:${argString}`;
 };
 
 /**
@@ -72,7 +95,7 @@ exports.delByPattern = async (pattern) => {
 exports.cacheWrapper = (fn, keyPrefix, ttl = DEFAULT_TTL) => {
   return async (...args) => {
     // Create a unique cache key based on the function arguments
-    const key = `${keyPrefix}:${JSON.stringify(args)}`;
+    const key = this.generateKey(keyPrefix, ...args);
     
     // Try to get data from cache
     const cachedData = await this.get(key);
@@ -88,4 +111,54 @@ exports.cacheWrapper = (fn, keyPrefix, ttl = DEFAULT_TTL) => {
     
     return result;
   };
+};
+
+/**
+ * Clear cache for specific entity
+ * @param {string} entity Entity name (e.g., "projects", "users")
+ * @param {string} id Entity ID
+ */
+exports.clearEntityCache = async (entity, id) => {
+  try {
+    // Clear specific entity
+    if (id) {
+      await this.del(`${entity}:${id}`);
+    }
+    
+    // Clear entity lists
+    await this.delByPattern(`${entity}:list:*`);
+    
+    logger.debug(`Cleared cache for ${entity}${id ? ` with ID ${id}` : ''}`);
+  } catch (error) {
+    logger.error(`Error clearing entity cache: ${error.message}`, { entity, id });
+  }
+};
+
+/**
+ * Multi-get from cache
+ * @param {Array<string>} keys Array of cache keys
+ * @returns {Promise<Array<any>>} Array of cached values
+ */
+exports.mget = async (keys) => {
+  try {
+    const values = await redis.mget(keys);
+    return values.map(value => value ? JSON.parse(value) : null);
+  } catch (error) {
+    logger.error(`Error getting multiple items from cache: ${error.message}`, { keys });
+    return keys.map(() => null);
+  }
+};
+
+/**
+ * Get TTL for a cached key
+ * @param {string} key Cache key
+ * @returns {Promise<number>} TTL in seconds or -1 if key doesn't exist
+ */
+exports.getTTL = async (key) => {
+  try {
+    return await redis.ttl(key);
+  } catch (error) {
+    logger.error(`Error getting TTL for key: ${error.message}`, { key });
+    return -1;
+  }
 }; 
