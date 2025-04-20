@@ -5,16 +5,12 @@
 const WebSocket = require('ws');
 const http = require('http');
 const url = require('url');
-const { v4: uuidv4 } = require('uuid');
-const jwt = require('jsonwebtoken');
 const { WebSocketError } = require('../errors');
 const logger = require('../utils/logger');
 const config = require('../config');
-const WebSocketConnection = require('../../modules/websocket/models/WebSocketConnection');
-const WebSocketMessage = require('../../modules/websocket/models/WebSocketMessage');
-
-// Connection tracking
-const activeConnections = new Map();
+const connectionService = require('../../modules/websocket/services/connection.service');
+const messageService = require('../../modules/websocket/services/message.service');
+const notificationService = require('../../modules/websocket/services/notification.service');
 
 /**
  * Set up WebSocket server
@@ -23,7 +19,10 @@ const activeConnections = new Map();
  */
 const setupWebSocketServer = (server) => {
   // Create WS server with noServer option
-  const wss = new WebSocket.Server({ noServer: true });
+  const wss = new WebSocket.Server({ 
+    noServer: true,
+    maxPayload: 1024 * 1024 // 1MB max message size
+  });
 
   /**
    * Broadcast message to all connected clients or specific user
@@ -31,207 +30,21 @@ const setupWebSocketServer = (server) => {
    * @param {String} [userId] - Optional user ID to target specific user
    */
   wss.broadcast = (message, userId = null) => {
-    const messageStr = JSON.stringify(message);
-    
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        // If userId is provided, only send to that user's connections
-        if (!userId || client.userId === userId) {
-          client.send(messageStr);
-        }
-      }
-    });
-  };
-
-  /**
-   * Handle new WebSocket connection
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {Object} user - Authenticated user
-   * @param {Object} clientInfo - Client information
-   */
-  const handleConnection = async (ws, user, clientInfo) => {
-    try {
-      // Generate unique connection ID
-      const connectionId = uuidv4();
-      
-      // Store user info with connection
-      ws.userId = user.sub;
-      ws.connectionId = connectionId;
-      
-      // Track connection in database
-      const connection = await WebSocketConnection.create({
-        connection_id: connectionId,
-        user_id: user.sub,
-        client_ip: clientInfo.ip,
-        user_agent: clientInfo.userAgent,
-        connected_at: new Date(),
-        is_active: true
-      });
-      
-      // Add to active connections map
-      activeConnections.set(connectionId, {
-        ws,
-        userId: user.sub,
-        connectionId,
-        connectedAt: new Date(),
-        clientInfo
-      });
-      
-      // Log connection
-      logger.info(`WebSocket connection established for user ${user.sub}`, {
-        userId: user.sub,
-        connectionId,
-        ip: clientInfo.ip
-      });
-      
-      // Send welcome message
-      ws.send(JSON.stringify({
-        type: 'connection:established',
-        payload: {
-          connectionId,
-          status: 'connected',
-          message: 'Connection established successfully',
-          timestamp: new Date().toISOString()
-        }
-      }));
-      
-      // Set up heartbeat to detect connection drops
-      ws.isAlive = true;
-      ws.on('pong', () => {
-        ws.isAlive = true;
-      });
-      
-      // Handle incoming messages
-      ws.on('message', (data) => handleMessage(ws, data));
-      
-      // Handle connection close
-      ws.on('close', () => handleDisconnect(connectionId, user.sub));
-      
-      // Handle errors
-      ws.on('error', (error) => {
-        logger.error(`WebSocket error for user ${user.sub}`, { 
-          userId: user.sub, 
-          connectionId,
-          error: error.message 
-        });
-      });
-    } catch (error) {
-      logger.error(`Failed to handle WebSocket connection: ${error.message}`);
-      ws.terminate();
-    }
-  };
-
-  /**
-   * Handle WebSocket messages
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {String|Buffer} data - Message data
-   */
-  const handleMessage = async (ws, data) => {
-    try {
-      // Parse message
-      const message = JSON.parse(data.toString());
-      
-      // Validate message format
-      if (!message.type || !message.payload) {
-        return sendError(ws, 'Invalid message format', 'WS_002');
-      }
-      
-      // Store message in database for persistence
-      await WebSocketMessage.create({
-        connection_id: ws.connectionId,
-        user_id: ws.userId,
-        message_type: message.type,
-        message_data: JSON.stringify(message.payload),
-        created_at: new Date()
-      });
-      
-      // Handle different message types
-      switch (message.type) {
-        case 'ping':
-          // Handle ping message
-          ws.send(JSON.stringify({
-            type: 'pong',
-            payload: { timestamp: new Date().toISOString() }
-          }));
-          break;
-          
-        case 'notification:ack':
-          // Handle notification acknowledgment
-          // Implementation would go here
-          break;
-          
-        default:
-          // Handle custom messages by emitting events
-          // This could integrate with an event emitter system
-          logger.debug(`Received message of type ${message.type}`, {
-            userId: ws.userId,
-            connectionId: ws.connectionId,
-            messageType: message.type
-          });
-      }
-    } catch (error) {
-      logger.error(`Error handling WebSocket message: ${error.message}`);
-      sendError(ws, 'Failed to process message', 'WS_003');
-    }
-  };
-
-  /**
-   * Handle WebSocket disconnection
-   * @param {String} connectionId - Connection ID
-   * @param {String} userId - User ID
-   */
-  const handleDisconnect = async (connectionId, userId) => {
-    try {
-      // Update connection status in database
-      await WebSocketConnection.update(
-        { is_active: false, disconnected_at: new Date() },
-        { where: { connection_id: connectionId } }
-      );
-      
-      // Remove from active connections
-      activeConnections.delete(connectionId);
-      
-      // Log disconnection
-      logger.info(`WebSocket connection closed for user ${userId}`, {
-        userId,
-        connectionId
-      });
-    } catch (error) {
-      logger.error(`Error handling WebSocket disconnect: ${error.message}`);
-    }
-  };
-
-  /**
-   * Send error message to client
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {String} message - Error message
-   * @param {String} code - Error code
-   */
-  const sendError = (ws, message, code = 'WS_001') => {
-    try {
-      ws.send(JSON.stringify({
-        type: 'error',
-        payload: {
-          code,
-          message,
-          timestamp: new Date().toISOString()
-        }
-      }));
-    } catch (error) {
-      logger.error(`Failed to send error message: ${error.message}`);
+    if (userId) {
+      messageService.sendToUser(userId, message.type, message.payload);
+    } else {
+      messageService.broadcast(message.type, message.payload);
     }
   };
 
   // Set up heartbeat interval to detect dead connections
   const heartbeatInterval = setInterval(() => {
     wss.clients.forEach((ws) => {
-      if (ws.isAlive === false) {
-        // Connection is dead, terminate it
+      if (!connectionService.isConnectionAlive(ws.connectionId)) {
         return ws.terminate();
       }
       
-      // Mark as not alive, will be marked alive when pong is received
-      ws.isAlive = false;
+      connectionService.updateConnectionStatus(ws.connectionId, false);
       ws.ping();
     });
   }, 30000); // 30 seconds interval
@@ -251,19 +64,13 @@ const setupWebSocketServer = (server) => {
         // Verify token from query parameter
         const token = query.token;
         if (!token) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
           return;
         }
         
-        // Validate JWT token
-        let user;
-        try {
-          user = jwt.verify(token, config.jwt.secret);
-        } catch (error) {
-          logger.error(`WebSocket authentication failed: ${error.message}`);
-          socket.destroy();
-          return;
-        }
+        // Authenticate the connection
+        const user = await connectionService.authenticateConnection(token);
         
         // Extract client info
         const clientInfo = {
@@ -272,20 +79,59 @@ const setupWebSocketServer = (server) => {
           acceptLanguage: request.headers['accept-language'] || ''
         };
         
-        // Authenticate the connection
-        wss.handleUpgrade(request, socket, head, (ws) => {
-          // Complete the connection
-          wss.emit('connection', ws);
-          
-          // Handle the connection with authenticated user
-          handleConnection(ws, user, clientInfo);
+        // Upgrade the connection
+        wss.handleUpgrade(request, socket, head, async (ws) => {
+          try {
+            // Track the connection
+            const connectionId = await connectionService.trackConnection(ws, user, clientInfo);
+            
+            // Store connection info on ws object
+            ws.userId = user.sub;
+            ws.connectionId = connectionId;
+            ws.isAlive = true;
+            
+            // Set up WebSocket event handlers
+            ws.on('pong', () => {
+              connectionService.updateConnectionStatus(connectionId, true);
+            });
+            
+            ws.on('message', (data) => {
+              messageService.handleMessage(ws, data);
+            });
+            
+            ws.on('close', () => {
+              connectionService.handleDisconnect(connectionId, user.sub);
+            });
+            
+            ws.on('error', (error) => {
+              logger.error(`WebSocket error for user ${user.sub}:`, error);
+            });
+            
+            // Complete the connection
+            wss.emit('connection', ws);
+            
+            // Send welcome message
+            ws.send(JSON.stringify({
+              type: 'connection:established',
+              payload: {
+                connectionId,
+                status: 'connected',
+                message: 'Connection established successfully',
+                timestamp: new Date().toISOString()
+              }
+            }));
+          } catch (error) {
+            logger.error('Failed to setup WebSocket connection:', error);
+            ws.terminate();
+          }
         });
       } catch (error) {
-        logger.error(`Failed to upgrade WebSocket connection: ${error.message}`);
+        logger.error('Failed to upgrade WebSocket connection:', error);
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
         socket.destroy();
       }
     } else {
-      // Not a WebSocket endpoint, destroy the connection
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
       socket.destroy();
     }
   });
