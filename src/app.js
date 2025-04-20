@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 
-const apiV1Router = require('./api/v1/routes');
+const apiRouter = require('./api'); // Updated to use the new version router
 const errorHandler = require('./shared/middleware/error.middleware');
 const requestLogger = require('./shared/middleware/logger.middleware');
 const logger = require('./shared/utils/logger');
@@ -27,8 +27,8 @@ app.use(morgan('combined', { stream: logger.stream })); // HTTP request logging
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// API Routes
-app.use(`/api/${process.env.API_VERSION || 'v1'}`, apiV1Router);
+// API Routes - using the new versioning router
+app.use('/api', apiRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
