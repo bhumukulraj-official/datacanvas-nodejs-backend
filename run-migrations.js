@@ -12,7 +12,7 @@ console.log('Running migrations in the correct order...');
 // First migration - enum types
 const runEnumTypes = () => {
   return new Promise((resolve, reject) => {
-    const command = 'npx sequelize-cli db:migrate --to 20250421102712000000-create-enum-types.js';
+    const command = 'npx sequelize-cli db:migrate --to 20250422022605000000000-create-enum-types.js';
     exec(command, (error, stdout, stderr) => {
       if (error) {
         console.error(`Error running enum types migration: ${error.message}`);
