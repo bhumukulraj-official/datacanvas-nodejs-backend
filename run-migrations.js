@@ -12,25 +12,10 @@ console.log('Running migrations in the correct order...');
 // First migration - enum types
 const runEnumTypes = () => {
   return new Promise((resolve, reject) => {
-    const command = 'npx sequelize-cli db:migrate --to 20250420125199-create-enum-types.js';
+    const command = 'npx sequelize-cli db:migrate --to 20250421102712000000-create-enum-types.js';
     exec(command, (error, stdout, stderr) => {
       if (error) {
         console.error(`Error running enum types migration: ${error.message}`);
-        return reject(error);
-      }
-      console.log(stdout);
-      resolve();
-    });
-  });
-};
-
-// Second - Create users table (required by other tables)
-const runUsersTable = () => {
-  return new Promise((resolve, reject) => {
-    const command = 'npx sequelize-cli db:migrate --to 20250420125200-create-users-table.js';
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error running users table migration: ${error.message}`);
         return reject(error);
       }
       console.log(stdout);
@@ -73,7 +58,6 @@ const seedDatabase = () => {
 const runAll = async () => {
   try {
     await runEnumTypes();
-    await runUsersTable();
     await runRemainingMigrations();
     await seedDatabase();
     console.log('All migrations and seeding completed successfully!');
