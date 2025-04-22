@@ -1,5 +1,8 @@
 'use strict';
 
+// Import the addConstraints utility
+const { addConstraints } = require('../src/utils/migrationUtils');
+
 module.exports = {
   up: async (queryInterface, Sequelize) => {
     return queryInterface.sequelize.transaction(async (transaction) => {
@@ -84,6 +87,12 @@ module.exports = {
         transaction
       });
 
+      // Add URL validation constraints using the utility function
+      await addConstraints(queryInterface, 'profiles', {
+        'chk_profiles_website': "website IS NULL OR website ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'",
+        'chk_profiles_avatar_url': "avatar_url IS NULL OR avatar_url ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'"
+      }, transaction);
+
       // Add constraints for PostgreSQL
       const dialect = queryInterface.sequelize.getDialect();
       if (dialect === 'postgres') {
@@ -91,10 +100,6 @@ module.exports = {
           ALTER TABLE profiles
           ADD CONSTRAINT check_phone_format
           CHECK (phone IS NULL OR phone ~* '^[+]?[0-9]{10,15}$');
-          
-          ALTER TABLE profiles
-          ADD CONSTRAINT check_website_format
-          CHECK (website IS NULL OR website ~* '^https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?$');
         `, { transaction });
       }
     });

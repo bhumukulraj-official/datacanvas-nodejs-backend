@@ -139,7 +139,11 @@ module.exports = {
         const constraints = {
           'check_password_length': 'length(password) >= 8',
           'check_username_length': 'length(username) >= 3 AND length(username) <= 50',
-          'check_login_attempts': 'login_attempts >= 0'
+          'check_login_attempts': 'login_attempts >= 0',
+          // New constraints added from fix-migration-issues.js
+          'chk_users_username': "username ~ '^[a-zA-Z0-9_-]{3,50}$'",
+          'chk_users_password': "char_length(password) >= 60",
+          'chk_users_email_verified': "is_email_verified IN (true, false)"
         };
         
         await addConstraints(queryInterface, 'users', constraints, transaction);

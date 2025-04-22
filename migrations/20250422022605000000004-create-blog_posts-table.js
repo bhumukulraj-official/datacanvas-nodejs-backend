@@ -5,7 +5,8 @@ const {
   addConstraints, 
   addTextSearchCapabilities,
   addStateTransitionValidation,
-  dropStateTransitionValidation
+  dropStateTransitionValidation,
+  optimizeIndexes
 } = require('../src/utils/migrationUtils');
 
 /**
@@ -225,12 +226,27 @@ module.exports = {
             "status != 'published' OR (status = 'published' AND published_at IS NOT NULL)",
           
           // Validate view and comment counts
-          'check_post_counts': 'view_count >= 0 AND comment_count >= 0'
+          'check_post_counts': 'view_count >= 0 AND comment_count >= 0',
+          
+          // Add status constraint as defined in fix-migration-issues.js
+          'chk_blog_posts_status': "status IN ('draft', 'published', 'archived', 'deleted')"
         };
         
         await addConstraints(queryInterface, 'blog_posts', constraints, transaction);
 
         console.log('Successfully added constraints to blog_posts table');
+
+        // Optimize indexes as defined in fix-migration-issues.js
+        await optimizeIndexes(queryInterface, 'blog_posts', {
+          'idx_blog_posts_status': {
+            fields: ['status'],
+            where: { deleted_at: null }
+          },
+          'idx_blog_posts_published': {
+            fields: ['published_at'],
+            where: { status: 'published', deleted_at: null }
+          }
+        }, transaction);
 
         // 5. Add state transition validation for post status
         

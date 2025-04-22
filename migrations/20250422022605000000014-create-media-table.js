@@ -248,29 +248,12 @@ module.exports = {
           // Validate filename length
           'check_filename_length': 'filename IS NULL OR length(filename) <= 255',
           
-          // Validate visibility values
-          'check_visibility_values': "visibility IN ('public', 'private', 'restricted')",
-          
-          // Validate valid storage providers
-          'check_storage_provider': "storage_provider IN ('local', 's3', 'cloudinary', 'azure', 'gcp')",
-          
-          // Validate file extension format
-          'check_file_extension': "file_extension ~ '^[a-zA-Z0-9]{1,10}$'",
-          
-          // Validate common file extensions based on type
-          'check_image_extensions': "type != 'image' OR file_extension IN ('jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'tiff')",
-          'check_video_extensions': "type != 'video' OR file_extension IN ('mp4', 'webm', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'm4v')",
-          'check_document_extensions': "type != 'document' OR file_extension IN ('pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'rtf', 'md')",
-          'check_audio_extensions': "type != 'audio' OR file_extension IN ('mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma')",
-          
-          // Validate mime types format
-          'check_mime_format': "mime_type ~ '^[a-zA-Z0-9\\-\\.]+/[a-zA-Z0-9\\-\\.]+$'",
-          
-          // Validate common mime types based on type
-          'check_image_mimes': "type != 'image' OR mime_type LIKE 'image/%'",
-          'check_video_mimes': "type != 'video' OR mime_type LIKE 'video/%'",
-          'check_document_mimes': "type != 'document' OR mime_type IN ('application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'text/plain', 'text/csv', 'application/rtf', 'text/markdown')",
-          'check_audio_mimes': "type != 'audio' OR mime_type LIKE 'audio/%'"
+          // Add constraints from fix-migration-issues.js
+          'chk_media_size': 'size >= 0',
+          'chk_media_optimized_size': 'optimized_size IS NULL OR optimized_size >= 0',
+          'chk_media_url': "url ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'",
+          'chk_media_optimized_url': "optimized_url IS NULL OR optimized_url ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'",
+          'chk_media_thumbnail_url': "thumbnail_url IS NULL OR thumbnail_url ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'"
         };
         
         await addConstraints(queryInterface, 'media', constraints, transaction);

@@ -222,18 +222,19 @@ module.exports = {
           
           // Slug format validation (simpler version handled at DB level)
           // More complex regex patterns will be handled by application code
-          'check_slug_format': "slug NOT LIKE '% %'"
+          'check_slug_format': "slug NOT LIKE '% %'",
+          
+          // Adding constraints from fix-migration-issues.js
+          'chk_projects_title': "char_length(title) >= 3 AND char_length(title) <= 200",
+          'chk_projects_description': "char_length(description) >= 10",
+          'chk_projects_slug': "slug ~ '^[a-z0-9-]+$'",
+          'chk_projects_github_url': "github_url IS NULL OR github_url ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'",
+          'chk_projects_live_url': "live_url IS NULL OR live_url ~ '^https?://[\\w.-]+(?:\\.[\\w.-]+)+[\\w\\-._~:/?#[\\]@!$&''()*+,;=]*$'"
         };
         
         await addConstraints(queryInterface, 'projects', constraints, transaction);
         
-        // 2. URL validation for github_url and live_url
-        await addUrlValidationConstraints(
-          queryInterface, 
-          'projects', 
-          ['github_url', 'live_url'],
-          transaction
-        );
+        // 2. URL validation for github_url and live_url - handled by the more specific constraints above
         
         // 3. JSON validation for tags and technologies
         await addJsonValidationConstraint(queryInterface, 'projects', 'tags', transaction);
