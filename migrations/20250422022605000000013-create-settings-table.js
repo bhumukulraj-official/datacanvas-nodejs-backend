@@ -109,9 +109,9 @@ module.exports = {
       ALTER TABLE settings
       ADD CONSTRAINT check_url_format
       CHECK (
-        (logo_url IS NULL OR logo_url ~* '^https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?$')
+        (logo_url IS NULL OR logo_url ~* '^https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?(/.*)?$')
         AND
-        (favicon_url IS NULL OR favicon_url ~* '^https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?$')
+        (favicon_url IS NULL OR favicon_url ~* '^https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\\.[a-zA-Z]{2,}(?:\\.[a-zA-Z]{2,})?(/.*)?$')
       );
     `);
   },

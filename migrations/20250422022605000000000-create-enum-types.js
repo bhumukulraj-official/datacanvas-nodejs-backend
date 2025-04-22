@@ -30,8 +30,8 @@ module.exports = {
           post_visibility: ['public', 'private', 'password_protected'],
           
           // Notification related enums
-          notification_priority: ['low', 'medium', 'high'],
-          notification_type: ['system', 'user', 'security', 'content'],
+          notification_priority: ['low', 'medium', 'high', 'critical'],
+          notification_type: ['system', 'user', 'security', 'content', 'account', 'project', 'billing', 'social'],
           notification_status: ['unread', 'read', 'archived'],
           
           // Media related enums
