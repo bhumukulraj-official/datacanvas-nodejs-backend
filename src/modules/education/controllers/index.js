@@ -1,5 +1,5 @@
 /**
- * Export controllers
+ * Education Controllers Index
  */
 const educationController = require('./education.controller');
 

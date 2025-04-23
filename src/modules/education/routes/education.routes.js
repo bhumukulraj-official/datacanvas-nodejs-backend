@@ -18,11 +18,48 @@ router.get(
   educationController.getAllEducation
 );
 
-// Get education by ID
+// Filter and search education entries
 router.get(
-  '/:id',
-  validate(educationValidator.getEducationById),
-  educationController.getEducationById
+  '/filter',
+  validate(educationValidator.filterEducation),
+  educationController.filterEducation
+);
+
+// Get education statistics
+router.get(
+  '/statistics',
+  educationController.getEducationStatistics
+);
+
+// Get education statistics for a specific user
+router.get(
+  '/user/:userId/statistics',
+  educationController.getEducationStatistics
+);
+
+// Export education data
+router.get(
+  '/export',
+  validate(educationValidator.exportEducation),
+  educationController.exportEducation
+);
+
+// Bulk operations
+router.post(
+  '/import',
+  validate(educationValidator.importEducation),
+  educationController.importEducation
+);
+
+router.patch(
+  '/bulk-update',
+  validate(educationValidator.importEducation), // Reuse the same validator
+  educationController.bulkUpdateEducation
+);
+
+router.delete(
+  '/bulk-delete',
+  educationController.bulkDeleteEducation
 );
 
 // Get current education (where is_current is true)
@@ -35,6 +72,13 @@ router.get(
 router.get(
   '/user/:userId/current',
   educationController.getCurrentEducation
+);
+
+// Get education by ID
+router.get(
+  '/:id',
+  validate(educationValidator.getEducationById),
+  educationController.getEducationById
 );
 
 // Create new education entry
