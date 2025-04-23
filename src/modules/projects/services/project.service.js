@@ -4,6 +4,7 @@ const cache = require('../../../shared/utils/cache');
 const logger = require('../../../shared/utils/logger');
 const { Op } = require('sequelize');
 const slugify = require('slugify');
+const webhookService = require('./project-webhook.service');
 
 /**
  * Get all projects with pagination and optional filtering
@@ -205,6 +206,8 @@ const createProject = async (projectData) => {
     
     logger.info(`Project created: ${project.id}`);
     
+    await webhookService.notifyWebhooks('created', project);
+    
     return project;
   } catch (error) {
     logger.error(`Error creating project: ${error.message}`, { projectData });
@@ -256,6 +259,8 @@ const updateProject = async (id, projectData, userId) => {
     
     logger.info(`Project updated: ${id}`);
     
+    await webhookService.notifyWebhooks('updated', project);
+    
     return project;
   } catch (error) {
     logger.error(`Error updating project: ${error.message}`, { id, projectData });
@@ -299,6 +304,8 @@ const updateProjectStatus = async (id, status, userId) => {
     
     logger.info(`Project status updated: ${id} (${status})`);
     
+    await webhookService.notifyWebhooks('status_changed', project);
+    
     return project;
   } catch (error) {
     logger.error(`Error updating project status: ${error.message}`, { id, status });
@@ -329,6 +336,8 @@ const deleteProject = async (id, userId) => {
     await cache.del(`projects:slug:${project.slug}`);
     
     logger.info(`Project deleted: ${id}`);
+    
+    await webhookService.notifyWebhooks('deleted', project);
     
     return { success: true };
   } catch (error) {

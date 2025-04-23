@@ -261,11 +261,12 @@ exports.getPublicProfile = async (req, res, next) => {
  * @apiGroup Profile
  * @apiVersion 1.0.0
  * 
- * @apiParam {String} username Username to check availability for
+ * @apiParam {String} username Username to check
  * 
  * @apiSuccess {Boolean} success Indicates successful operation
  * @apiSuccess {Object} data Availability data
- * @apiSuccess {Boolean} data.available Whether the username is available
+ * @apiSuccess {Boolean} data.isAvailable Whether the username is available
+ * @apiSuccess {Array} [data.suggestions] Alternative username suggestions if not available
  * @apiSuccess {String} message Success message
  * @apiSuccess {String} timestamp Operation timestamp
  */
@@ -275,18 +276,21 @@ exports.checkUsernameAvailability = async (req, res, next) => {
     const { username } = req.params;
     
     // Check availability
-    const isAvailable = await profileService.checkUsernameAvailability(username);
+    const availabilityData = await profileService.checkUsernameAvailability(username);
     
     return res.status(200).json({
       success: true,
-      data: {
-        available: isAvailable
-      },
-      message: isAvailable ? 'Username is available' : 'Username is not available',
+      data: availabilityData,
+      message: availabilityData.isAvailable 
+        ? 'Username is available' 
+        : 'Username is already taken',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error in checkUsernameAvailability controller', { error: error.message, username: req.params.username });
+    logger.error('Error in checkUsernameAvailability controller', { 
+      error: error.message, 
+      username: req.params?.username 
+    });
     next(error);
   }
 }; 

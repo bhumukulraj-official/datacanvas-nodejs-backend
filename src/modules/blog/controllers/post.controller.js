@@ -228,4 +228,190 @@ exports.deletePost = async (req, res, next) => {
     }
     next(error);
   }
+};
+
+/**
+ * Get related posts
+ */
+exports.getRelatedPosts = async (req, res, next) => {
+  try {
+    const { slug } = req.params;
+    const { limit = 5 } = req.query;
+    
+    // First get the post by slug
+    const post = await blogService.getBlogPostBySlug(slug, { 
+      status: 'published' // Only consider published posts
+    });
+    
+    // Then get related posts
+    const relatedPosts = await blogService.getRelatedPosts(post.id, limit);
+    
+    return res.status(200).json({
+      success: true,
+      data: relatedPosts,
+      message: 'Related posts retrieved successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Generate RSS feed
+ */
+exports.getRssFeed = async (req, res, next) => {
+  try {
+    const posts = await blogService.generateRssFeed();
+    
+    // Set content type to XML
+    res.setHeader('Content-Type', 'application/rss+xml');
+    
+    // Generate simple RSS feed XML
+    const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
+    const siteName = process.env.SITE_NAME || 'DataCanvas Blog';
+    const siteDescription = process.env.SITE_DESCRIPTION || 'The DataCanvas Blog';
+    
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>';
+    xml += '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">';
+    xml += '<channel>';
+    xml += `<title>${siteName}</title>`;
+    xml += `<description>${siteDescription}</description>`;
+    xml += `<link>${siteUrl}</link>`;
+    xml += `<atom:link href="${siteUrl}/blog/feed.xml" rel="self" type="application/rss+xml" />`;
+    
+    // Add each post
+    posts.forEach(post => {
+      xml += '<item>';
+      xml += `<title>${post.title}</title>`;
+      xml += `<description>${post.excerpt || ''}</description>`;
+      xml += `<pubDate>${new Date(post.published_at).toUTCString()}</pubDate>`;
+      xml += `<link>${siteUrl}/blog/${post.slug}</link>`;
+      xml += `<guid isPermaLink="true">${siteUrl}/blog/${post.slug}</guid>`;
+      
+      if (post.category) {
+        xml += `<category>${post.category.name}</category>`;
+      }
+      
+      if (post.author) {
+        xml += `<author>${post.author.name}</author>`;
+      }
+      
+      xml += '</item>';
+    });
+    
+    xml += '</channel>';
+    xml += '</rss>';
+    
+    return res.send(xml);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Generate Atom feed
+ */
+exports.getAtomFeed = async (req, res, next) => {
+  try {
+    const posts = await blogService.generateRssFeed();
+    
+    // Set content type to XML
+    res.setHeader('Content-Type', 'application/atom+xml');
+    
+    // Generate simple Atom feed XML
+    const siteUrl = process.env.SITE_URL || 'http://localhost:3000';
+    const siteName = process.env.SITE_NAME || 'DataCanvas Blog';
+    const siteDescription = process.env.SITE_DESCRIPTION || 'The DataCanvas Blog';
+    
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>';
+    xml += '<feed xmlns="http://www.w3.org/2005/Atom">';
+    xml += `<title>${siteName}</title>`;
+    xml += `<subtitle>${siteDescription}</subtitle>`;
+    xml += `<link href="${siteUrl}" />`;
+    xml += `<link href="${siteUrl}/blog/feed.atom" rel="self" />`;
+    xml += `<id>${siteUrl}/</id>`;
+    xml += `<updated>${new Date().toISOString()}</updated>`;
+    
+    // Add each post
+    posts.forEach(post => {
+      xml += '<entry>';
+      xml += `<title>${post.title}</title>`;
+      xml += `<id>${siteUrl}/blog/${post.slug}</id>`;
+      xml += `<link href="${siteUrl}/blog/${post.slug}" />`;
+      xml += `<updated>${new Date(post.updated_at).toISOString()}</updated>`;
+      xml += `<published>${new Date(post.published_at).toISOString()}</published>`;
+      
+      if (post.author) {
+        xml += '<author>';
+        xml += `<name>${post.author.name}</name>`;
+        xml += '</author>';
+      }
+      
+      xml += `<summary>${post.excerpt || ''}</summary>`;
+      
+      if (post.category) {
+        xml += `<category term="${post.category.name}" scheme="${siteUrl}/blog/categories/${post.category.slug}" />`;
+      }
+      
+      xml += '</entry>';
+    });
+    
+    xml += '</feed>';
+    
+    return res.send(xml);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Schedule a post for future publication
+ */
+exports.schedulePost = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { publish_date } = req.body;
+    const userId = req.user.id;
+    
+    if (!publish_date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Publication date is required',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const post = await blogService.schedulePost(id, publish_date, userId);
+    
+    return res.status(200).json({
+      success: true,
+      data: post,
+      message: 'Post scheduled successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    if (error.message === 'You do not have permission to schedule this post') {
+      return next(new PermissionError('You do not have permission to schedule this post'));
+    }
+    next(error);
+  }
+};
+
+/**
+ * Publish all scheduled posts that have reached their publication date (admin only)
+ */
+exports.publishScheduledPosts = async (req, res, next) => {
+  try {
+    const results = await blogService.publishScheduledPosts();
+    
+    return res.status(200).json({
+      success: true,
+      data: results,
+      message: `${results.count} posts published successfully`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    next(error);
+  }
 }; 

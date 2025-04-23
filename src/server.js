@@ -3,6 +3,7 @@ const http = require('http');
 const app = require('./app');
 const { initDatabase } = require('./shared/database');
 const websocketService = require('./modules/websocket/services/websocket.service');
+const { initScheduler } = require('./modules/scheduler');
 const logger = require('./shared/utils/logger');
 
 const port = process.env.PORT || 3000;
@@ -21,6 +22,10 @@ const startServer = async () => {
     // Setup WebSocket server
     websocketService.initialize(server);
     logger.info('WebSocket server initialized');
+    
+    // Initialize scheduler for jobs
+    initScheduler();
+    logger.info('Scheduler initialized');
     
     // Start HTTP server
     server.listen(port, () => {

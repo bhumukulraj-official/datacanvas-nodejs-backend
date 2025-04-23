@@ -258,18 +258,26 @@ exports.updateAvatar = async (userId, file) => {
  * @returns {Promise<Object>} Resume URL and upload timestamp
  */
 exports.updateResume = async (userId, file) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     const profile = await Profile.findOne({
-      where: { user_id: userId }
+      where: { user_id: userId },
+      transaction
     });
     
     if (!profile) {
+      await transaction.rollback();
       throw new NotFoundError('Profile not found');
     }
     
-    // Calculate resume URL
+    // Generate paths
+    const resumePath = file.path;
+    const resumeFilename = file.filename;
+    
+    // Calculate URL
     const baseUrl = config.app.url || 'http://localhost:3000';
-    const resumeUrl = `${baseUrl}/uploads/resumes/${file.filename}`;
+    const resumeUrl = `${baseUrl}/uploads/resumes/${resumeFilename}`;
     
     // Delete old resume if exists
     if (profile.resume_url) {
@@ -287,16 +295,21 @@ exports.updateResume = async (userId, file) => {
     // Update profile with new resume URL
     await profile.update({
       resume_url: resumeUrl
-    });
+    }, { transaction });
+    
+    await transaction.commit();
     
     // Invalidate cache
     await cache.del(`profiles:${userId}`);
     
     return {
       resumeUrl,
-      uploadedAt: new Date().toISOString()
+      uploadedAt: new Date().toISOString(),
+      fileType: file.mimetype,
+      fileSize: file.size
     };
   } catch (error) {
+    await transaction.rollback();
     logger.error('Error updating resume', { userId, error: error.message });
     throw error;
   }
@@ -327,42 +340,49 @@ exports.deleteAvatar = async (userId) => {
       throw new NotFoundError('Profile not found');
     }
     
-    // Delete avatar file if exists
+    // Only proceed if there's an avatar to delete
     if (profile.avatar_url) {
+      // Delete the file
       const baseUrl = config.app.url || 'http://localhost:3000';
       const avatarPath = profile.avatar_url.replace(`${baseUrl}/uploads/`, path.join(process.cwd(), 'uploads/'));
+      
       try {
         if (fs.existsSync(avatarPath)) {
           fs.unlinkSync(avatarPath);
         }
         
         // Also try to delete thumbnail
-        const thumbPath = avatarPath.replace(path.basename(avatarPath), `thumb_${path.basename(avatarPath)}`);
+        const filename = path.basename(avatarPath);
+        const thumbFilename = `thumb_${filename}`;
+        const thumbPath = path.join(path.dirname(avatarPath), thumbFilename);
+        
         if (fs.existsSync(thumbPath)) {
           fs.unlinkSync(thumbPath);
         }
       } catch (error) {
-        logger.error(`Error deleting avatar file: ${error.message}`, { userId, path: avatarPath });
-        // Continue execution even if deletion fails
+        logger.error(`Error deleting avatar file: ${error.message}`, { userId, avatarPath });
+        // Continue execution even if file deletion fails
       }
-    }
-    
-    // Update profile with null avatar URL
-    await profile.update({
-      avatar_url: null
-    }, { transaction });
-    
-    // Also update User model avatar for consistency
-    if (user) {
-      await user.update({
-        avatar: null
+      
+      // Update profile to remove avatar reference
+      await profile.update({
+        avatar_url: null
       }, { transaction });
+      
+      // Also update User model for consistency
+      if (user) {
+        await user.update({
+          avatar: null
+        }, { transaction });
+      }
     }
     
     await transaction.commit();
     
     // Invalidate cache
     await cache.del(`profiles:${userId}`);
+    
+    return true;
   } catch (error) {
     await transaction.rollback();
     logger.error('Error deleting avatar', { userId, error: error.message });
@@ -376,37 +396,48 @@ exports.deleteAvatar = async (userId) => {
  * @returns {Promise<void>}
  */
 exports.deleteResume = async (userId) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     const profile = await Profile.findOne({
-      where: { user_id: userId }
+      where: { user_id: userId },
+      transaction
     });
     
     if (!profile) {
+      await transaction.rollback();
       throw new NotFoundError('Profile not found');
     }
     
-    // Delete resume file if exists
+    // Only proceed if there's a resume to delete
     if (profile.resume_url) {
+      // Delete the file
       const baseUrl = config.app.url || 'http://localhost:3000';
       const resumePath = profile.resume_url.replace(`${baseUrl}/uploads/`, path.join(process.cwd(), 'uploads/'));
+      
       try {
         if (fs.existsSync(resumePath)) {
           fs.unlinkSync(resumePath);
         }
       } catch (error) {
-        logger.error(`Error deleting resume file: ${error.message}`, { userId, path: resumePath });
-        // Continue execution even if deletion fails
+        logger.error(`Error deleting resume file: ${error.message}`, { userId, resumePath });
+        // Continue execution even if file deletion fails
       }
+      
+      // Update profile to remove resume reference
+      await profile.update({
+        resume_url: null
+      }, { transaction });
     }
     
-    // Update profile with null resume URL
-    await profile.update({
-      resume_url: null
-    });
+    await transaction.commit();
     
     // Invalidate cache
     await cache.del(`profiles:${userId}`);
+    
+    return true;
   } catch (error) {
+    await transaction.rollback();
     logger.error('Error deleting resume', { userId, error: error.message });
     throw error;
   }
@@ -419,9 +450,12 @@ exports.deleteResume = async (userId) => {
  */
 exports.getPublicProfileByUsername = async (username) => {
   try {
-    // Find user by username
+    // Get user by username
     const user = await User.findOne({
-      where: { username },
+      where: { 
+        username,
+        status: 'active' // Only return active users
+      },
       attributes: ['id', 'username', 'first_name', 'last_name', 'bio', 'avatar']
     });
     
@@ -429,7 +463,7 @@ exports.getPublicProfileByUsername = async (username) => {
       throw new NotFoundError('User not found');
     }
     
-    // Get associated profile
+    // Get profile
     const profile = await Profile.findOne({
       where: { user_id: user.id }
     });
@@ -438,20 +472,20 @@ exports.getPublicProfileByUsername = async (username) => {
       throw new NotFoundError('Profile not found');
     }
     
-    // Format the response (only including public information)
+    // Return public information only
     return {
-      username: user.username,
       personalInfo: {
+        username: user.username,
         firstName: user.first_name,
         lastName: user.last_name,
         title: profile.title,
-        bio: profile.bio || user.bio,
-        avatar: profile.avatar_url || user.avatar,
+        bio: profile.bio || user.bio, // Use profile bio first, fallback to user bio
+        avatar: profile.avatar_url || user.avatar, // Use profile avatar first, fallback to user avatar
         location: profile.location,
         website: profile.website
       },
       socialLinks: profile.social_links || {}
-      // Note: Not including sensitive data like phone number or email
+      // Note: Not including phone, email, or resume in public profile for privacy
     };
   } catch (error) {
     logger.error('Error fetching public profile', { username, error: error.message });
@@ -460,17 +494,36 @@ exports.getPublicProfileByUsername = async (username) => {
 };
 
 /**
- * Check username availability
+ * Check if a username is available
  * @param {string} username - Username to check
- * @returns {Promise<boolean>} Whether the username is available
+ * @returns {Promise<Object>} Availability status
  */
 exports.checkUsernameAvailability = async (username) => {
   try {
-    const existingUser = await User.findOne({
-      where: { username }
+    // Get user by username
+    const user = await User.findOne({
+      where: { username },
+      attributes: ['id']
     });
     
-    return !existingUser;
+    const isAvailable = !user;
+    
+    // Return availability information with suggestions if not available
+    if (!isAvailable) {
+      // Generate suggestions by adding numbers or underscores
+      const suggestions = [];
+      for (let i = 1; i <= 3; i++) {
+        suggestions.push(`${username}${i}`);
+        suggestions.push(`${username}_${i}`);
+      }
+      
+      return {
+        isAvailable,
+        suggestions
+      };
+    }
+    
+    return { isAvailable };
   } catch (error) {
     logger.error('Error checking username availability', { username, error: error.message });
     throw error;

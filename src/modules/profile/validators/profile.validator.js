@@ -21,6 +21,9 @@ exports.updateProfile = [
     .isObject()
     .withMessage('Personal info must be an object'),
   
+  // Remove validation for name and email which don't exist in the Profile model
+  // These fields should be updated through the User API instead
+  
   body('personalInfo.title')
     .optional()
     .isString()
@@ -57,31 +60,40 @@ exports.updateProfile = [
     .withMessage('Website must be a valid URL format')
     .trim(),
   
-  // Social Links validation
+  // Social Links validation - Enhanced with stricter validation
   body('socialLinks')
     .optional()
     .isObject()
     .withMessage('Social links must be an object with platform keys'),
   
-  body('socialLinks.*.platform')
+  // Apply validation to each social link entry
+  body('socialLinks.*')
     .optional()
-    .isString()
-    .trim()
-    .notEmpty()
-    .withMessage('Platform is required')
-    .isIn(['github', 'linkedin', 'twitter', 'facebook', 'instagram', 'dribbble', 'behance', 'youtube', 'medium', 'codepen', 'stackoverflow'])
-    .withMessage('Invalid social media platform'),
-  
-  body('socialLinks.*.url')
-    .optional()
-    .isURL()
-    .withMessage('Social link URL must be a valid URL')
-    .trim(),
-  
-  body('socialLinks.*.icon')
-    .optional()
-    .isString()
-    .trim(),
+    .custom((value) => {
+      if (!value.url || typeof value.url !== 'string') {
+        throw new Error('URL is required and must be a string');
+      }
+      
+      // Validate URL format
+      const urlRegex = /^https?:\/\/[\w.-]+(?:\.[\w.-]+)+[\w\-._~:/?#[\]@!$&'()*+,;=]*$/;
+      if (!urlRegex.test(value.url)) {
+        throw new Error('Invalid URL format');
+      }
+      
+      // Validate platform-specific URL patterns
+      if (value.platform === 'github' && !value.url.includes('github.com')) {
+        throw new Error('GitHub URL must contain github.com');
+      }
+      if (value.platform === 'linkedin' && !value.url.includes('linkedin.com')) {
+        throw new Error('LinkedIn URL must contain linkedin.com');
+      }
+      if (value.platform === 'twitter' && !value.url.includes('twitter.com') && !value.url.includes('x.com')) {
+        throw new Error('Twitter URL must contain twitter.com or x.com');
+      }
+      // Add more platform validations as needed
+      
+      return true;
+    }),
   
   validateRequest
 ];

@@ -254,6 +254,12 @@ BlogPost.associate = (models) => {
     otherKey: 'tag_id',
     as: 'tags'
   });
+
+  // Add comment relationship
+  BlogPost.hasMany(models.BlogComment, {
+    foreignKey: 'post_id',
+    as: 'comments'
+  });
 };
 
 module.exports = BlogPost; 

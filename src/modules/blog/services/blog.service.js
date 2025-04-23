@@ -1,5 +1,5 @@
-const { BlogPost, BlogCategory, BlogTag, BlogPostTag, User, Sequelize } = require('../../../shared/database/models');
-const { NotFoundError, ValidationError, AuthenticationError } = require('../../../shared/errors');
+const { BlogPost, BlogCategory, BlogTag, BlogPostTag, User, Sequelize, BlogComment } = require('../../../shared/database/models');
+const { NotFoundError, ValidationError, AuthenticationError, PermissionError } = require('../../../shared/errors');
 const cache = require('../../../shared/utils/cache');
 const logger = require('../../../shared/utils/logger');
 const slugify = require('slugify');
@@ -680,6 +680,646 @@ const checkProtectedPostPassword = async (slug, password) => {
   }
 };
 
+/**
+ * Get all blog tags with pagination and sorting
+ */
+const getBlogTags = async (options = {}) => {
+  const {
+    page = 1,
+    limit = 20,
+    sort = 'name',
+    order = 'asc'
+  } = options;
+
+  const offset = (page - 1) * limit;
+  
+  const { rows, count } = await BlogTag.findAndCountAll({
+    limit,
+    offset,
+    order: [[sort, order.toUpperCase()]],
+    include: [
+      {
+        model: User,
+        as: 'creator',
+        attributes: ['id', 'name', 'avatar']
+      }
+    ],
+    attributes: {
+      include: [
+        [
+          Sequelize.literal('(SELECT COUNT(*) FROM blog_posts_tags WHERE blog_posts_tags.tag_id = "BlogTag".id)'),
+          'post_count'
+        ]
+      ]
+    }
+  });
+  
+  return {
+    tags: rows,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(count / limit),
+      totalItems: count,
+      itemsPerPage: limit,
+      hasNextPage: page < Math.ceil(count / limit),
+      hasPreviousPage: page > 1
+    }
+  };
+};
+
+/**
+ * Get tags with post count
+ */
+const getTagsWithPostCount = async () => {
+  const tags = await BlogTag.findAll({
+    attributes: {
+      include: [
+        [
+          Sequelize.literal('(SELECT COUNT(*) FROM blog_posts_tags WHERE blog_posts_tags.tag_id = "BlogTag".id)'),
+          'post_count'
+        ]
+      ]
+    },
+    order: [['name', 'ASC']]
+  });
+  
+  return tags;
+};
+
+/**
+ * Get blog tag by slug
+ */
+const getBlogTagBySlug = async (slug) => {
+  const tag = await BlogTag.findOne({
+    where: { slug },
+    include: [
+      {
+        model: BlogPost,
+        as: 'posts',
+        where: { status: 'published' },
+        attributes: ['id', 'title', 'slug', 'excerpt', 'featured_image', 'published_at'],
+        through: { attributes: [] },
+        required: false
+      },
+      {
+        model: User,
+        as: 'creator',
+        attributes: ['id', 'name', 'avatar']
+      }
+    ],
+    attributes: {
+      include: [
+        [
+          Sequelize.literal('(SELECT COUNT(*) FROM blog_posts_tags WHERE blog_posts_tags.tag_id = "BlogTag".id)'),
+          'post_count'
+        ]
+      ]
+    }
+  });
+  
+  if (!tag) {
+    throw new NotFoundError('Blog tag not found');
+  }
+  
+  return tag;
+};
+
+/**
+ * Create a new blog tag
+ */
+const createBlogTag = async (tagData, userId) => {
+  // Generate slug from name if not provided
+  if (!tagData.slug) {
+    tagData.slug = slugify(tagData.name, { lower: true, strict: true });
+  } else {
+    tagData.slug = slugify(tagData.slug, { lower: true, strict: true });
+  }
+  
+  // Check if slug already exists
+  const existingTag = await BlogTag.findOne({ where: { slug: tagData.slug } });
+  if (existingTag) {
+    throw new ValidationError('A tag with this slug already exists');
+  }
+  
+  // Set creator ID
+  tagData.created_by = userId;
+  
+  // Create the tag
+  const tag = await BlogTag.create(tagData);
+  
+  return tag;
+};
+
+/**
+ * Update a blog tag
+ */
+const updateBlogTag = async (id, tagData, userId) => {
+  const tag = await BlogTag.findByPk(id);
+  if (!tag) {
+    throw new NotFoundError('Blog tag not found');
+  }
+  
+  // Generate new slug if name changed
+  if (tagData.name && !tagData.slug) {
+    tagData.slug = slugify(tagData.name, { lower: true, strict: true });
+  } else if (tagData.slug) {
+    tagData.slug = slugify(tagData.slug, { lower: true, strict: true });
+  }
+  
+  // Check if new slug already exists (if slug is changing)
+  if (tagData.slug && tagData.slug !== tag.slug) {
+    const existingTag = await BlogTag.findOne({ where: { slug: tagData.slug } });
+    if (existingTag) {
+      throw new ValidationError('A tag with this slug already exists');
+    }
+  }
+  
+  // Update the tag
+  await tag.update(tagData);
+  
+  return tag;
+};
+
+/**
+ * Delete a blog tag
+ */
+const deleteBlogTag = async (id, userId) => {
+  const tag = await BlogTag.findByPk(id);
+  if (!tag) {
+    throw new NotFoundError('Blog tag not found');
+  }
+  
+  // Check if tag is used by any posts
+  const postCount = await BlogPostTag.count({ where: { tag_id: id } });
+  if (postCount > 0) {
+    throw new ValidationError('Cannot delete tag that is used by posts');
+  }
+  
+  // Delete the tag
+  await tag.destroy();
+  
+  return true;
+};
+
+/**
+ * Get related posts for a post
+ */
+const getRelatedPosts = async (postId, limit = 5) => {
+  const post = await BlogPost.findByPk(postId, {
+    include: [
+      {
+        model: BlogTag,
+        as: 'tags',
+        attributes: ['id'],
+        through: { attributes: [] }
+      }
+    ]
+  });
+  
+  if (!post) {
+    throw new NotFoundError('Blog post not found');
+  }
+  
+  const tagIds = post.tags.map(tag => tag.id);
+  
+  if (tagIds.length === 0) {
+    // If post has no tags, find posts with same category
+    const relatedPosts = await BlogPost.findAll({
+      where: {
+        category_id: post.category_id,
+        id: { [Op.ne]: post.id },
+        status: 'published'
+      },
+      limit,
+      order: [['published_at', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'name', 'avatar']
+        }
+      ],
+      attributes: ['id', 'title', 'slug', 'excerpt', 'featured_image', 'published_at']
+    });
+    
+    return relatedPosts;
+  }
+  
+  // Find posts that share tags with the current post
+  const relatedPosts = await BlogPost.findAll({
+    include: [
+      {
+        model: BlogTag,
+        as: 'tags',
+        where: { id: { [Op.in]: tagIds } },
+        through: { attributes: [] }
+      },
+      {
+        model: User,
+        as: 'author',
+        attributes: ['id', 'name', 'avatar']
+      }
+    ],
+    where: {
+      id: { [Op.ne]: post.id },
+      status: 'published'
+    },
+    limit,
+    order: [['published_at', 'DESC']],
+    attributes: ['id', 'title', 'slug', 'excerpt', 'featured_image', 'published_at']
+  });
+  
+  return relatedPosts;
+};
+
+/**
+ * Generate RSS feed
+ */
+const generateRssFeed = async () => {
+  const posts = await BlogPost.findAll({
+    where: { 
+      status: 'published',
+      visibility: 'public'
+    },
+    order: [['published_at', 'DESC']],
+    limit: 20,
+    include: [
+      {
+        model: User,
+        as: 'author',
+        attributes: ['id', 'name']
+      },
+      {
+        model: BlogCategory,
+        as: 'category',
+        attributes: ['id', 'name', 'slug']
+      }
+    ]
+  });
+  
+  return posts;
+};
+
+/**
+ * Get comments for a blog post
+ */
+const getCommentsForPost = async (postId, options = {}) => {
+  const {
+    page = 1,
+    limit = 20,
+    sort = 'created_at',
+    order = 'asc'
+  } = options;
+
+  const offset = (page - 1) * limit;
+  
+  // First check if the post exists
+  const post = await BlogPost.findByPk(postId);
+  if (!post) {
+    throw new NotFoundError('Blog post not found');
+  }
+  
+  // Get only approved comments for public view
+  const { rows, count } = await BlogComment.findAndCountAll({
+    where: { 
+      post_id: postId, 
+      status: 'approved',
+      parent_id: null // Only get top-level comments
+    },
+    limit,
+    offset,
+    order: [[sort, order.toUpperCase()]],
+    include: [
+      {
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'avatar'],
+        required: false
+      },
+      {
+        model: BlogComment,
+        as: 'replies',
+        where: { status: 'approved' },
+        required: false,
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'name', 'avatar'],
+            required: false
+          }
+        ]
+      }
+    ],
+    attributes: {
+      exclude: ['author_email', 'ip_address', 'user_agent'] // Don't expose private info
+    }
+  });
+  
+  return {
+    comments: rows,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(count / limit),
+      totalItems: count,
+      itemsPerPage: limit,
+      hasNextPage: page < Math.ceil(count / limit),
+      hasPreviousPage: page > 1
+    }
+  };
+};
+
+/**
+ * Get comments for admin with all statuses
+ */
+const getCommentsForAdmin = async (options = {}) => {
+  const {
+    page = 1,
+    limit = 20,
+    sort = 'created_at',
+    order = 'desc',
+    status = null,
+    postId = null
+  } = options;
+
+  const offset = (page - 1) * limit;
+  
+  const query = {
+    limit,
+    offset,
+    order: [[sort, order.toUpperCase()]],
+    include: [
+      {
+        model: BlogPost,
+        as: 'post',
+        attributes: ['id', 'title', 'slug']
+      },
+      {
+        model: User,
+        as: 'user',
+        attributes: ['id', 'name', 'email', 'avatar'],
+        required: false
+      }
+    ],
+    where: {}
+  };
+  
+  // Filter by status if provided
+  if (status) {
+    query.where.status = status;
+  }
+  
+  // Filter by post if provided
+  if (postId) {
+    query.where.post_id = postId;
+  }
+  
+  const { rows, count } = await BlogComment.findAndCountAll(query);
+  
+  return {
+    comments: rows,
+    pagination: {
+      currentPage: page,
+      totalPages: Math.ceil(count / limit),
+      totalItems: count,
+      itemsPerPage: limit,
+      hasNextPage: page < Math.ceil(count / limit),
+      hasPreviousPage: page > 1
+    }
+  };
+};
+
+/**
+ * Create a new comment
+ */
+const createComment = async (commentData) => {
+  // First check if the post exists
+  const post = await BlogPost.findByPk(commentData.post_id);
+  if (!post) {
+    throw new NotFoundError('Blog post not found');
+  }
+  
+  // Check if it's a reply and validate parent comment
+  if (commentData.parent_id) {
+    const parentComment = await BlogComment.findByPk(commentData.parent_id);
+    if (!parentComment) {
+      throw new NotFoundError('Parent comment not found');
+    }
+    
+    // Ensure parent comment belongs to the same post
+    if (parentComment.post_id !== parseInt(commentData.post_id)) {
+      throw new ValidationError('Parent comment does not belong to this post');
+    }
+  }
+  
+  // Start a transaction
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // Create the comment
+    const comment = await BlogComment.create(commentData, { transaction });
+    
+    // Update comment count on the post
+    await BlogPost.increment('comment_count', { 
+      where: { id: commentData.post_id },
+      transaction
+    });
+    
+    // Commit transaction
+    await transaction.commit();
+    
+    // Invalidate cache
+    await cache.delByPattern(`blog:posts:${commentData.post_id}`);
+    await cache.delByPattern(`blog:comments:${commentData.post_id}`);
+    
+    return comment;
+  } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    throw error;
+  }
+};
+
+/**
+ * Update comment status (admin only)
+ */
+const updateCommentStatus = async (id, status) => {
+  const comment = await BlogComment.findByPk(id, {
+    include: [
+      {
+        model: BlogPost,
+        as: 'post',
+        attributes: ['id']
+      }
+    ]
+  });
+  
+  if (!comment) {
+    throw new NotFoundError('Comment not found');
+  }
+  
+  // Start a transaction
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const oldStatus = comment.status;
+    
+    // Update the comment status
+    await comment.update({ status }, { transaction });
+    
+    // If approving a comment that wasn't approved before, increment the post's comment count
+    if (status === 'approved' && oldStatus !== 'approved') {
+      await BlogPost.increment('comment_count', { 
+        where: { id: comment.post.id },
+        transaction
+      });
+    }
+    
+    // If un-approving a comment that was approved before, decrement the post's comment count
+    if (status !== 'approved' && oldStatus === 'approved') {
+      await BlogPost.decrement('comment_count', { 
+        where: { id: comment.post.id },
+        transaction
+      });
+    }
+    
+    // Commit transaction
+    await transaction.commit();
+    
+    // Invalidate cache
+    await cache.delByPattern(`blog:posts:${comment.post.id}`);
+    await cache.delByPattern(`blog:comments:${comment.post.id}`);
+    
+    return comment;
+  } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    throw error;
+  }
+};
+
+/**
+ * Delete a comment (admin only)
+ */
+const deleteComment = async (id) => {
+  const comment = await BlogComment.findByPk(id, {
+    include: [
+      {
+        model: BlogPost,
+        as: 'post',
+        attributes: ['id']
+      }
+    ]
+  });
+  
+  if (!comment) {
+    throw new NotFoundError('Comment not found');
+  }
+  
+  // Start a transaction
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // If comment was approved, decrement post's comment count
+    if (comment.status === 'approved') {
+      await BlogPost.decrement('comment_count', { 
+        where: { id: comment.post.id },
+        transaction
+      });
+    }
+    
+    // Delete the comment
+    await comment.destroy({ transaction });
+    
+    // Commit transaction
+    await transaction.commit();
+    
+    // Invalidate cache
+    await cache.delByPattern(`blog:posts:${comment.post.id}`);
+    await cache.delByPattern(`blog:comments:${comment.post.id}`);
+    
+    return { success: true };
+  } catch (error) {
+    // Rollback transaction on error
+    await transaction.rollback();
+    throw error;
+  }
+};
+
+/**
+ * Publish scheduled posts that have reached their publication date
+ */
+const publishScheduledPosts = async () => {
+  const now = new Date();
+  
+  // Find posts that are scheduled (draft with future published_at date)
+  const scheduledPosts = await BlogPost.findAll({
+    where: {
+      status: 'draft',
+      published_at: {
+        [Op.lte]: now // Less than or equal to now
+      }
+    }
+  });
+  
+  if (scheduledPosts.length === 0) {
+    return { success: true, count: 0 };
+  }
+  
+  const results = {
+    success: true,
+    count: scheduledPosts.length,
+    published: []
+  };
+  
+  // Publish each post
+  for (const post of scheduledPosts) {
+    try {
+      await post.update({ status: 'published' });
+      results.published.push({ id: post.id, title: post.title });
+    } catch (error) {
+      logger.error(`Error publishing scheduled post ${post.id}: ${error.message}`);
+    }
+  }
+  
+  // Invalidate cache
+  await cache.delByPattern('blog:posts:*');
+  
+  return results;
+};
+
+/**
+ * Schedule a post for future publication
+ */
+const schedulePost = async (id, publishDate, userId) => {
+  const post = await BlogPost.findByPk(id);
+  
+  if (!post) {
+    throw new NotFoundError('Blog post not found');
+  }
+  
+  // Check permissions
+  if (post.author_id !== userId) {
+    throw new PermissionError('You do not have permission to schedule this post');
+  }
+  
+  // Ensure the date is in the future
+  const now = new Date();
+  const scheduleDate = new Date(publishDate);
+  
+  if (scheduleDate <= now) {
+    throw new ValidationError('Publication date must be in the future');
+  }
+  
+  // Set the published_at date and ensure status is draft
+  await post.update({
+    published_at: scheduleDate,
+    status: 'draft'
+  });
+  
+  return post;
+};
+
 // Apply caching to read operations
 exports.getBlogPosts = cache.cacheWrapper(
   getBlogPosts,
@@ -704,4 +1344,24 @@ exports.createBlogPost = createBlogPost;
 exports.updateBlogPost = updateBlogPost;
 exports.updatePostStatus = updatePostStatus;
 exports.deleteBlogPost = deleteBlogPost;
-exports.checkProtectedPostPassword = checkProtectedPostPassword; 
+exports.checkProtectedPostPassword = checkProtectedPostPassword;
+// New tag management functions
+exports.getBlogTags = getBlogTags;
+exports.getTagsWithPostCount = getTagsWithPostCount;
+exports.getBlogTagBySlug = getBlogTagBySlug;
+exports.createBlogTag = createBlogTag;
+exports.updateBlogTag = updateBlogTag;
+exports.deleteBlogTag = deleteBlogTag;
+// Related posts function
+exports.getRelatedPosts = getRelatedPosts;
+// RSS feed function
+exports.generateRssFeed = generateRssFeed;
+// Comment functions
+exports.getCommentsForPost = getCommentsForPost;
+exports.getCommentsForAdmin = getCommentsForAdmin;
+exports.createComment = createComment;
+exports.updateCommentStatus = updateCommentStatus;
+exports.deleteComment = deleteComment;
+// Scheduling functions
+exports.publishScheduledPosts = publishScheduledPosts;
+exports.schedulePost = schedulePost; 

@@ -19,6 +19,7 @@ class AppError extends Error {
     this.details = details;
     this.timestamp = new Date().toISOString();
     this.isOperational = true;
+    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
     
     Error.captureStackTrace(this, this.constructor);
   }
@@ -95,6 +96,24 @@ class WebSocketError extends AppError {
   }
 }
 
+class ConflictError extends AppError {
+  constructor(message) {
+    super(message || 'Conflict error', 409);
+  }
+}
+
+class TooManyRequestsError extends AppError {
+  constructor(message) {
+    super(message || 'Too many requests', 429);
+  }
+}
+
+class ServerError extends AppError {
+  constructor(message) {
+    super(message || 'Internal server error', 500);
+  }
+}
+
 module.exports = {
   AppError,
   NotFoundError,
@@ -106,5 +125,8 @@ module.exports = {
   FileError,
   DatabaseError,
   RateLimitError,
-  WebSocketError
+  WebSocketError,
+  ConflictError,
+  TooManyRequestsError,
+  ServerError
 }; 
