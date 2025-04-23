@@ -1,7 +1,15 @@
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../../../shared/database');
 
-class ContactSubmission extends Model {}
+class ContactSubmission extends Model {
+  static associate(models) {
+    // Define association here
+    this.belongsTo(models.User, {
+      foreignKey: 'assigned_to',
+      as: 'assignedUser'
+    });
+  }
+}
 
 ContactSubmission.init(
   {
@@ -30,18 +38,43 @@ ContactSubmission.init(
       allowNull: false,
     },
     status: {
-      type: DataTypes.STRING(10),
+      type: DataTypes.ENUM('new', 'read', 'replied', 'spam', 'archived'),
       defaultValue: 'new',
-      validate: {
-        isIn: [['new', 'read', 'replied', 'archived']],
-      },
     },
     ip_address: {
       type: DataTypes.STRING(45),
       allowNull: true,
     },
+    user_agent: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
     recaptcha_token: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    recaptcha_score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    assigned_to: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id',
+      },
+    },
+    replied_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    reply_message: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    notes: {
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     created_at: {
@@ -52,6 +85,10 @@ ContactSubmission.init(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
@@ -60,6 +97,8 @@ ContactSubmission.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    paranoid: true,
+    deletedAt: 'deleted_at',
     indexes: [
       {
         name: 'idx_contact_submissions_status',
@@ -68,6 +107,10 @@ ContactSubmission.init(
       {
         name: 'idx_contact_submissions_created_at',
         fields: ['created_at'],
+      },
+      {
+        name: 'idx_contact_submissions_assigned_to',
+        fields: ['assigned_to'],
       },
     ],
   }

@@ -40,6 +40,7 @@ const setupAssociations = () => {
   User.hasMany(AuditLog, { foreignKey: 'user_id', as: 'auditLogs' });
   User.hasMany(RateLimit, { foreignKey: 'user_id', as: 'rateLimits' });
   User.hasMany(WebSocketConnection, { foreignKey: 'user_id', as: 'webSocketConnections' });
+  User.hasMany(ContactSubmission, { foreignKey: 'assigned_to', as: 'assignedContactSubmissions' });
 
   // Profile associations
   Profile.belongsTo(User, { foreignKey: 'user_id' });
@@ -68,6 +69,9 @@ const setupAssociations = () => {
   BlogPost.belongsToMany(BlogTag, { through: BlogPostTag, foreignKey: 'post_id', otherKey: 'tag_id', as: 'tags' });
   BlogTag.belongsToMany(BlogPost, { through: BlogPostTag, foreignKey: 'tag_id', otherKey: 'post_id', as: 'posts' });
   BlogCategory.hasMany(BlogPost, { foreignKey: 'category_id', as: 'posts' });
+
+  // Contact associations
+  ContactSubmission.belongsTo(User, { foreignKey: 'assigned_to', as: 'assignedUser' });
 
   // Notification associations
   Notification.belongsTo(User, { foreignKey: 'user_id' });

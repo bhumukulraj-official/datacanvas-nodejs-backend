@@ -24,7 +24,7 @@ exports.validateContactSubmission = [
   body('message')
     .trim()
     .notEmpty().withMessage('Message is required')
-    .isLength({ max: 1000 }).withMessage('Message must be less than 1000 characters'),
+    .isLength({ max: 5000 }).withMessage('Message must be less than 5000 characters'),
     
   body('recaptchaToken')
     .notEmpty().withMessage('reCAPTCHA verification is required'),
@@ -58,7 +58,7 @@ exports.validateListSubmissions = [
     
   query('status')
     .optional()
-    .isIn(['new', 'read', 'replied', 'archived']).withMessage('Invalid status'),
+    .isIn(['new', 'read', 'replied', 'spam', 'archived']).withMessage('Invalid status'),
     
   query('sortBy')
     .optional()
@@ -67,6 +67,18 @@ exports.validateListSubmissions = [
   query('sortOrder')
     .optional()
     .isIn(['ASC', 'DESC']).withMessage('Sort order must be ASC or DESC'),
+    
+  query('search')
+    .optional()
+    .isString().withMessage('Search term must be a string'),
+    
+  query('fromDate')
+    .optional()
+    .isISO8601().withMessage('From date must be a valid date in ISO 8601 format'),
+    
+  query('toDate')
+    .optional()
+    .isISO8601().withMessage('To date must be a valid date in ISO 8601 format'),
     
   // Handle validation errors
   (req, res, next) => {
@@ -114,7 +126,7 @@ exports.validateUpdateSubmission = [
     
   body('status')
     .optional()
-    .isIn(['new', 'read', 'replied', 'archived']).withMessage('Invalid status'),
+    .isIn(['new', 'read', 'replied', 'spam', 'archived']).withMessage('Invalid status'),
     
   body('notes')
     .optional()
@@ -149,7 +161,104 @@ exports.validateReplySubmission = [
     
   body('reply_message')
     .notEmpty().withMessage('Reply message is required')
-    .isString().withMessage('Reply message must be a string'),
+    .isString().withMessage('Reply message must be a string')
+    .isLength({ max: 5000 }).withMessage('Reply message must be less than 5000 characters'),
+    
+  // Handle validation errors
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const validationErrors = errors.array().map(error => ({
+        field: error.param,
+        message: error.msg
+      }));
+      
+      return next(new AppError('Validation error', 400, 'VAL_001', validationErrors));
+    }
+    next();
+  }
+];
+
+/**
+ * Validate export parameters
+ */
+exports.validateExport = [
+  query('status')
+    .optional()
+    .isIn(['new', 'read', 'replied', 'spam', 'archived']).withMessage('Invalid status'),
+    
+  query('fromDate')
+    .optional()
+    .isISO8601().withMessage('From date must be a valid date in ISO 8601 format'),
+    
+  query('toDate')
+    .optional()
+    .isISO8601().withMessage('To date must be a valid date in ISO 8601 format'),
+    
+  query('format')
+    .optional()
+    .isIn(['csv', 'json']).withMessage('Format must be csv or json'),
+    
+  // Handle validation errors
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const validationErrors = errors.array().map(error => ({
+        field: error.param,
+        message: error.msg
+      }));
+      
+      return next(new AppError('Validation error', 400, 'VAL_001', validationErrors));
+    }
+    next();
+  }
+];
+
+/**
+ * Validate bulk update
+ */
+exports.validateBulkUpdate = [
+  body('ids')
+    .isArray().withMessage('IDs must be an array')
+    .notEmpty().withMessage('IDs array cannot be empty'),
+    
+  body('ids.*')
+    .isInt().withMessage('Each ID must be an integer'),
+    
+  body('status')
+    .optional()
+    .isIn(['new', 'read', 'replied', 'spam', 'archived']).withMessage('Invalid status'),
+    
+  body('assigned_to')
+    .optional()
+    .isInt().withMessage('Invalid user ID')
+    .toInt(),
+    
+  // Handle validation errors
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const validationErrors = errors.array().map(error => ({
+        field: error.param,
+        message: error.msg
+      }));
+      
+      return next(new AppError('Validation error', 400, 'VAL_001', validationErrors));
+    }
+    next();
+  }
+];
+
+/**
+ * Validate bulk delete
+ */
+exports.validateBulkDelete = [
+  body('ids')
+    .isArray().withMessage('IDs must be an array')
+    .notEmpty().withMessage('IDs array cannot be empty'),
+    
+  body('ids.*')
+    .isInt().withMessage('Each ID must be an integer'),
     
   // Handle validation errors
   (req, res, next) => {
