@@ -22,41 +22,104 @@ Project.init(
     title: {
       type: DataTypes.STRING(200),
       allowNull: false,
+      validate: {
+        len: [3, 200]
+      }
+    },
+    slug: {
+      type: DataTypes.STRING(200),
+      allowNull: false,
+      unique: true,
+      validate: {
+        is: /^[a-z0-9-]+$/i
+      }
     },
     description: {
       type: DataTypes.TEXT,
       allowNull: false,
+      validate: {
+        len: [10, Infinity]
+      }
     },
     thumbnail_url: {
       type: DataTypes.STRING(255),
       allowNull: true,
+      validate: {
+        isUrl: true
+      }
     },
     tags: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
-      defaultValue: [],
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: '[]',
+      get() {
+        const rawValue = this.getDataValue('tags');
+        return rawValue ? JSON.parse(rawValue) : [];
+      },
+      set(value) {
+        this.setDataValue('tags', JSON.stringify(value || []));
+      }
     },
     technologies: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
-      defaultValue: [],
+      type: DataTypes.TEXT,
+      allowNull: false,
+      defaultValue: '[]',
+      get() {
+        const rawValue = this.getDataValue('technologies');
+        return rawValue ? JSON.parse(rawValue) : [];
+      },
+      set(value) {
+        this.setDataValue('technologies', JSON.stringify(value || []));
+      }
     },
     github_url: {
       type: DataTypes.STRING(255),
       allowNull: true,
+      validate: {
+        isUrl: true
+      }
     },
     live_url: {
       type: DataTypes.STRING(255),
       allowNull: true,
+      validate: {
+        isUrl: true
+      }
+    },
+    start_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    end_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      validate: {
+        isAfterStartDate(value) {
+          if (value && this.start_date && value < this.start_date) {
+            throw new Error('End date must be after start date');
+          }
+        }
+      }
     },
     is_featured: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    display_order: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     status: {
-      type: DataTypes.STRING(10),
+      type: DataTypes.ENUM('draft', 'in_progress', 'completed', 'archived'),
       defaultValue: 'draft',
-      validate: {
-        isIn: [['draft', 'published']],
-      },
+    },
+    meta_title: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    meta_description: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,
@@ -66,6 +129,10 @@ Project.init(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    }
   },
   {
     sequelize,
@@ -74,6 +141,8 @@ Project.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    deletedAt: 'deleted_at',
+    paranoid: true,
     indexes: [
       {
         name: 'idx_projects_user_id',
@@ -88,9 +157,21 @@ Project.init(
         fields: ['is_featured'],
       },
       {
-        name: 'idx_projects_created_at',
-        fields: ['created_at'],
+        name: 'idx_projects_slug',
+        fields: ['slug'],
+        unique: true,
+        where: {
+          deleted_at: null
+        }
       },
+      {
+        name: 'idx_projects_display_order',
+        fields: ['display_order'],
+      },
+      {
+        name: 'idx_projects_deleted_at',
+        fields: ['deleted_at'],
+      }
     ],
     hooks: {
       afterUpdate: async (project) => {

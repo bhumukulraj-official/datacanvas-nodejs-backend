@@ -23,11 +23,29 @@ PasswordResetToken.init(
       type: DataTypes.STRING(255),
       allowNull: false,
       unique: true,
+      validate: {
+        len: [32, 255]
+      }
+    },
+    expires_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      validate: {
+        isAfterCreation(value) {
+          if (new Date(value) <= new Date()) {
+            throw new Error('Expiry date must be in the future');
+          }
+        }
+      }
     },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    }
   },
   {
     sequelize,
@@ -35,7 +53,7 @@ PasswordResetToken.init(
     tableName: 'password_reset_tokens',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: false,
+    updatedAt: 'updated_at',
     indexes: [
       {
         name: 'idx_password_reset_tokens_user_id',
@@ -43,8 +61,13 @@ PasswordResetToken.init(
       },
       {
         name: 'idx_password_reset_tokens_token',
+        unique: true,
         fields: ['token'],
       },
+      {
+        name: 'idx_password_reset_tokens_expires_at',
+        fields: ['expires_at'],
+      }
     ],
   }
 );

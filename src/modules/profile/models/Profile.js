@@ -21,8 +21,11 @@ Profile.init(
       onDelete: 'CASCADE',
     },
     title: {
-      type: DataTypes.STRING(200),
+      type: DataTypes.STRING(100),
       allowNull: true,
+      validate: {
+        len: [0, 100],
+      },
     },
     bio: {
       type: DataTypes.TEXT,
@@ -31,23 +34,41 @@ Profile.init(
     avatar_url: {
       type: DataTypes.STRING(255),
       allowNull: true,
+      validate: {
+        isUrl: true,
+        is: /^https?:\/\/[\w.-]+(?:\.[\w.-]+)+[\w\-._~:/?#[\]@!$&'()*+,;=]*$/,
+      },
     },
     phone: {
       type: DataTypes.STRING(20),
       allowNull: true,
+      validate: {
+        is: /^[+]?[0-9]{10,15}$/,
+      },
     },
     location: {
       type: DataTypes.STRING(100),
       allowNull: true,
+      validate: {
+        len: [0, 100],
+      },
     },
     social_links: {
       type: DataTypes.JSONB,
-      allowNull: true,
+      allowNull: false,
       defaultValue: {},
     },
     resume_url: {
       type: DataTypes.STRING(255),
       allowNull: true,
+    },
+    website: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      validate: {
+        isUrl: true,
+        is: /^https?:\/\/[\w.-]+(?:\.[\w.-]+)+[\w\-._~:/?#[\]@!$&'()*+,;=]*$/,
+      },
     },
     created_at: {
       type: DataTypes.DATE,
@@ -57,6 +78,10 @@ Profile.init(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
@@ -65,6 +90,8 @@ Profile.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    deletedAt: 'deleted_at',
+    paranoid: true,
     indexes: [
       {
         name: 'idx_profiles_user_id',

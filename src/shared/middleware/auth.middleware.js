@@ -1,13 +1,12 @@
 /**
  * Authentication and authorization middleware
- * Provides JWT validation, role-based access control, IP tracking, and device tracking
+ * Provides JWT validation, role-based access control, and IP tracking
  */
 const jwt = require('jsonwebtoken');
 const { AuthenticationError, TokenExpiredError, InvalidTokenError, PermissionError } = require('../errors');
 const logger = require('../utils/logger');
 const config = require('../config');
-const User = require('../../modules/auth/models/User'); // Adjust path as needed
-const DeviceTracker = require('../../modules/auth/services/device.service'); // Adjust path as needed
+const User = require('../../modules/auth/models/User');
 
 /**
  * Extract client information from request
@@ -20,14 +19,6 @@ const getClientInfo = (req) => {
   return {
     ip: req.ip || req.connection.remoteAddress,
     userAgent,
-    device: {
-      browser: userAgent.split(' ').pop(),
-      os: userAgent.includes('Windows') ? 'Windows' : 
-          userAgent.includes('Mac') ? 'Mac' : 
-          userAgent.includes('Linux') ? 'Linux' : 
-          userAgent.includes('Android') ? 'Android' : 
-          userAgent.includes('iOS') ? 'iOS' : 'Other',
-    },
     acceptLanguage: req.get('Accept-Language') || '',
     referrer: req.get('Referer') || '',
     timestamp: new Date().toISOString()
@@ -68,17 +59,13 @@ exports.requireAuth = async (req, res, next) => {
       throw new AuthenticationError('User not found');
     }
 
-    // Check if token was issued before password change
-    if (user.passwordChangedAt) {
-      const passwordChangedTimestamp = user.passwordChangedAt.getTime() / 1000;
-      if (decoded.iat < passwordChangedTimestamp) {
-        throw new TokenExpiredError('User recently changed password, please log in again');
-      }
+    // Check if user is active
+    if (user.status !== 'active') {
+      throw new AuthenticationError(`Account is ${user.status}`);
     }
 
-    // Track login info
+    // Get client info
     const clientInfo = getClientInfo(req);
-    await DeviceTracker.trackLogin(user.id, clientInfo);
     
     // Log access
     logger.info(`User ${user.id} authenticated`, { 
@@ -129,38 +116,6 @@ exports.requireRole = (roles) => {
 };
 
 /**
- * Track suspicious activities
- */
-exports.trackSuspiciousActivity = async (req, res, next) => {
-  try {
-    if (!req.user) {
-      return next();
-    }
-    
-    const clientInfo = getClientInfo(req);
-    const isKnownDevice = await DeviceTracker.isKnownDevice(req.user.id, clientInfo);
-    
-    if (!isKnownDevice) {
-      // Log new device login
-      logger.warn(`New device login detected for user ${req.user.id}`, {
-        userId: req.user.id,
-        ip: clientInfo.ip,
-        device: clientInfo.device
-      });
-      
-      // Track the new device (this could send an email notification)
-      await DeviceTracker.trackNewDevice(req.user.id, clientInfo);
-    }
-    
-    next();
-  } catch (error) {
-    // Non-blocking - just log the error and continue
-    logger.error(`Error tracking suspicious activity: ${error.message}`);
-    next();
-  }
-};
-
-/**
  * Optional authentication
  * Authenticates user if token is provided, but does not require authentication
  */
@@ -182,7 +137,7 @@ exports.optionalAuth = async (req, res, next) => {
       
       // Check if user exists
       const user = await User.findByPk(decoded.sub);
-      if (user) {
+      if (user && user.status === 'active') {
         req.user = user;
         req.clientInfo = getClientInfo(req);
       }
@@ -194,4 +149,21 @@ exports.optionalAuth = async (req, res, next) => {
   } catch (error) {
     next();
   }
+};
+
+/**
+ * Middleware to verify user has admin role
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+exports.adminRequired = (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Admin access required',
+      code: 'AUTH_003'
+    });
+  }
+  next();
 }; 

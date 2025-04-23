@@ -23,35 +23,29 @@ RefreshToken.init(
       type: DataTypes.STRING(255),
       allowNull: false,
       unique: true,
+      validate: {
+        len: [32, 255]
+      }
     },
     expires_at: {
       type: DataTypes.DATE,
       allowNull: false,
-    },
-    ip_address: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      comment: 'IP address that created this token',
-    },
-    user_agent: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      comment: 'User agent string for device tracking',
-    },
-    device_info: {
-      type: DataTypes.JSON,
-      defaultValue: {},
-      comment: 'Additional device information',
-    },
-    is_revoked: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-      comment: 'If the token has been explicitly revoked',
+      validate: {
+        isAfterCreation(value) {
+          if (new Date(value) <= new Date()) {
+            throw new Error('Expiry date must be in the future');
+          }
+        }
+      }
     },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    }
   },
   {
     sequelize,
@@ -59,7 +53,7 @@ RefreshToken.init(
     tableName: 'refresh_tokens',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: false,
+    updatedAt: 'updated_at',
     indexes: [
       {
         name: 'idx_refresh_tokens_user_id',
@@ -67,14 +61,24 @@ RefreshToken.init(
       },
       {
         name: 'idx_refresh_tokens_token',
+        unique: true,
         fields: ['token'],
       },
       {
-        name: 'idx_refresh_tokens_is_revoked',
-        fields: ['is_revoked'],
-      },
+        name: 'idx_refresh_tokens_expires_at',
+        fields: ['expires_at'],
+      }
     ],
   }
 );
+
+// Define associations
+RefreshToken.associate = (models) => {
+  RefreshToken.belongsTo(models.User, {
+    foreignKey: 'user_id',
+    as: 'user',
+    onDelete: 'CASCADE'
+  });
+};
 
 module.exports = RefreshToken; 

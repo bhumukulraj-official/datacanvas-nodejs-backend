@@ -9,7 +9,7 @@ exports.listPosts = async (req, res, next) => {
     const { 
       page, 
       limit, 
-      sort = 'publishedAt', 
+      sort = 'published_at', 
       order = 'desc', 
       category,
       tag,
@@ -44,8 +44,12 @@ exports.listPosts = async (req, res, next) => {
 exports.getPost = async (req, res, next) => {
   try {
     const { slug } = req.params;
+    const { password } = req.body; // For password-protected posts
     
-    const post = await blogService.getBlogPostBySlug(slug);
+    const post = await blogService.getBlogPostBySlug(slug, { 
+      password,
+      isAdmin: req.user?.role === 'admin' // Allow admins to see non-published posts
+    });
     
     return res.status(200).json({
       success: true,
@@ -118,6 +122,81 @@ exports.updatePost = async (req, res, next) => {
       success: true,
       data: post,
       message: 'Blog post updated successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    if (error.message === 'You do not have permission to update this post') {
+      return next(new PermissionError('You do not have permission to update this post'));
+    }
+    next(error);
+  }
+};
+
+/**
+ * Update a blog post's status (admin)
+ */
+exports.updatePostStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const userId = req.user.id;
+    
+    // Validate the status value
+    const validStatuses = ['draft', 'published', 'archived', 'deleted'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const post = await blogService.updatePostStatus(id, status, userId);
+    
+    return res.status(200).json({
+      success: true,
+      data: post,
+      message: `Blog post status updated to ${status}`,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    if (error.message === 'You do not have permission to update this post') {
+      return next(new PermissionError('You do not have permission to update this post'));
+    } else if (error.message && error.message.startsWith('Invalid state transition')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Update a blog post's featured status (admin)
+ */
+exports.updatePostFeatured = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { featured } = req.body;
+    const userId = req.user.id;
+    
+    // Validate the featured value is a boolean
+    if (typeof featured !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'Featured must be a boolean value',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const post = await blogService.updateBlogPost(id, { is_featured: featured }, userId);
+    
+    return res.status(200).json({
+      success: true,
+      data: post,
+      message: `Blog post featured status updated to ${featured}`,
       timestamp: new Date().toISOString()
     });
   } catch (error) {

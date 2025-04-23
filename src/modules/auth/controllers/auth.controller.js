@@ -28,18 +28,11 @@ exports.register = async (req, res, next) => {
  */
 exports.login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { emailOrUsername, password } = req.body;
     const ip = req.ip || req.connection.remoteAddress;
     const userAgent = req.get('User-Agent') || '';
-    
-    // Extract some basic device info from headers
-    const deviceInfo = {
-      ipAddress: ip,
-      userAgent,
-      acceptLanguage: req.get('Accept-Language') || '',
-    };
 
-    const result = await authService.login(email, password, ip, userAgent, deviceInfo);
+    const result = await authService.login(emailOrUsername, password, ip, userAgent);
 
     return AppResponse.success(res, result, 'Login successful');
   } catch (error) {
@@ -56,10 +49,8 @@ exports.login = async (req, res, next) => {
 exports.refreshToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
-    const ip = req.ip || req.connection.remoteAddress;
-    const userAgent = req.get('User-Agent') || '';
 
-    const result = await authService.refreshToken(refreshToken, ip, userAgent);
+    const result = await authService.refreshToken(refreshToken);
 
     return AppResponse.success(res, result, 'Token refreshed successfully');
   } catch (error) {

@@ -10,6 +10,15 @@ User.init(
       primaryKey: true,
       autoIncrement: true,
     },
+    username: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      unique: true,
+      validate: {
+        len: [3, 50],
+        is: /^[a-zA-Z0-9_-]{3,50}$/
+      },
+    },
     email: {
       type: DataTypes.STRING(255),
       allowNull: false,
@@ -18,60 +27,61 @@ User.init(
         isEmail: true,
       },
     },
-    password_hash: {
+    password: {
       type: DataTypes.STRING(255),
       allowNull: false,
-    },
-    name: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-    },
-    role: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      defaultValue: 'user',
       validate: {
-        isIn: [['admin', 'user']],
+        len: [60, 255]
       },
     },
-    email_verified: {
+    password_salt: {
+      type: DataTypes.STRING(64),
+      allowNull: false,
+      validate: {
+        len: [8, 64]
+      },
+    },
+    first_name: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    last_name: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    bio: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    avatar: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    role: {
+      type: DataTypes.ENUM('admin', 'editor', 'user'),
+      allowNull: false,
+      defaultValue: 'user',
+    },
+    status: {
+      type: DataTypes.ENUM('active', 'inactive', 'suspended', 'banned'),
+      allowNull: false,
+      defaultValue: 'active',
+    },
+    is_email_verified: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
-    // Password management fields
-    password_updated_at: {
+    last_login: {
       type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
+      allowNull: true,
     },
-    password_history: {
-      type: DataTypes.JSON,
-      defaultValue: [],
-      comment: 'Stores last 5 password hashes to prevent reuse',
-    },
-    // Account lockout fields
-    failed_login_attempts: {
+    login_attempts: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
-      comment: 'Number of consecutive failed login attempts',
     },
     locked_until: {
       type: DataTypes.DATE,
       allowNull: true,
-      comment: 'Account locked until this time after too many failed attempts',
-    },
-    // Session management fields
-    last_login_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
-    },
-    last_login_ip: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    active_sessions: {
-      type: DataTypes.JSON,
-      defaultValue: [],
-      comment: 'Track active sessions with IDs, IP addresses, and devices',
     },
     created_at: {
       type: DataTypes.DATE,
@@ -81,6 +91,10 @@ User.init(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
   },
   {
     sequelize,
@@ -89,17 +103,54 @@ User.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    deletedAt: 'deleted_at',
+    paranoid: true,
     indexes: [
+      {
+        name: 'idx_users_username',
+        fields: ['username'],
+        where: {
+          deleted_at: null
+        },
+        unique: true
+      },
       {
         name: 'idx_users_email',
         fields: ['email'],
+        where: {
+          deleted_at: null
+        },
+        unique: true
       },
       {
         name: 'idx_users_role',
         fields: ['role'],
       },
+      {
+        name: 'idx_users_status',
+        fields: ['status'],
+      },
+      {
+        name: 'idx_users_deleted_at',
+        fields: ['deleted_at'],
+      },
     ],
   }
 );
+
+// Define associations
+User.associate = (models) => {
+  User.hasMany(models.RefreshToken, {
+    foreignKey: 'user_id',
+    as: 'refreshTokens',
+    onDelete: 'CASCADE'
+  });
+  
+  User.hasMany(models.EmailVerificationToken, {
+    foreignKey: 'user_id',
+    as: 'emailVerificationTokens',
+    onDelete: 'CASCADE'
+  });
+};
 
 module.exports = User; 

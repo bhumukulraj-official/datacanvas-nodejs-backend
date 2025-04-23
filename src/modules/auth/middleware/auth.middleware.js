@@ -87,7 +87,7 @@ exports.checkEmailVerified = (req, res, next) => {
     return next(new AppError('Authentication required', 401, 'AUTH_001'));
   }
 
-  if (!req.user.email_verified) {
+  if (!req.user.is_email_verified) {
     return next(new AppError('Email not verified', 403, 'AUTH_017'));
   }
 

@@ -30,18 +30,16 @@ exports.updateProfile = [
     .withMessage('Name must be at most 100 characters'),
   
   body('personalInfo.title')
+    .optional()
     .isString()
     .trim()
-    .notEmpty()
-    .withMessage('Title is required')
-    .isLength({ max: 200 })
-    .withMessage('Title must be at most 200 characters'),
+    .isLength({ max: 100 })
+    .withMessage('Title must be at most 100 characters'),
   
   body('personalInfo.bio')
+    .optional()
     .isString()
     .trim()
-    .notEmpty()
-    .withMessage('Bio is required')
     .isLength({ max: 1000 })
     .withMessage('Bio must be at most 1000 characters'),
   
@@ -54,8 +52,8 @@ exports.updateProfile = [
     .optional()
     .isString()
     .trim()
-    .isLength({ max: 20 })
-    .withMessage('Phone must be at most 20 characters'),
+    .matches(/^[+]?[0-9]{10,15}$/)
+    .withMessage('Phone must be a valid phone number with 10-15 digits, optionally starting with +'),
   
   body('personalInfo.location')
     .optional()
@@ -64,11 +62,19 @@ exports.updateProfile = [
     .isLength({ max: 100 })
     .withMessage('Location must be at most 100 characters'),
   
+  body('personalInfo.website')
+    .optional()
+    .isURL()
+    .withMessage('Website must be a valid URL')
+    .matches(/^https?:\/\/[\w.-]+(?:\.[\w.-]+)+[\w\-._~:/?#[\]@!$&'()*+,;=]*$/)
+    .withMessage('Website must be a valid URL format')
+    .trim(),
+  
   // Social Links validation
   body('socialLinks')
     .optional()
-    .isArray()
-    .withMessage('Social links must be an array'),
+    .isObject()
+    .withMessage('Social links must be an object with platform keys'),
   
   body('socialLinks.*.platform')
     .optional()
@@ -82,7 +88,7 @@ exports.updateProfile = [
   body('socialLinks.*.url')
     .optional()
     .isURL()
-    .withMessage('Valid URL is required')
+    .withMessage('Social link URL must be a valid URL')
     .trim(),
   
   body('socialLinks.*.icon')

@@ -1,5 +1,6 @@
 const profileService = require('../services/profile.service');
 const { NotFoundError } = require('../../../shared/errors');
+const logger = require('../../../shared/utils/logger');
 
 /**
  * @api {get} /api/v1/profile Get profile
@@ -26,6 +27,7 @@ exports.getProfile = async (req, res, next) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    logger.error('Error in getProfile controller', { error: error.message, userId: req.user?.id });
     next(error);
   }
 };
@@ -39,13 +41,12 @@ exports.getProfile = async (req, res, next) => {
  * @apiHeader {String} Authorization User's JWT token
  * 
  * @apiParam {Object} personalInfo Personal information
- * @apiParam {String} personalInfo.name Name (max 100 chars)
- * @apiParam {String} personalInfo.title Professional title (max 200 chars)
- * @apiParam {String} personalInfo.bio Biography (max 1000 chars)
- * @apiParam {String} personalInfo.email Email address
- * @apiParam {String} [personalInfo.phone] Phone number (max 20 chars)
+ * @apiParam {String} [personalInfo.title] Professional title (max 100 chars)
+ * @apiParam {String} [personalInfo.bio] Biography
+ * @apiParam {String} [personalInfo.phone] Phone number (format: +1234567890)
  * @apiParam {String} [personalInfo.location] Location (max 100 chars)
- * @apiParam {Array} [socialLinks] Social media links
+ * @apiParam {String} [personalInfo.website] Personal website URL
+ * @apiParam {Object} [socialLinks] Social media links as platform-url pairs
  * 
  * @apiSuccess {Boolean} success Indicates successful operation
  * @apiSuccess {Object} data Updated profile data
@@ -70,6 +71,7 @@ exports.updateProfile = async (req, res, next) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    logger.error('Error in updateProfile controller', { error: error.message, userId: req.user?.id });
     next(error);
   }
 };
@@ -109,6 +111,7 @@ exports.uploadAvatar = async (req, res, next) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    logger.error('Error in uploadAvatar controller', { error: error.message, userId: req.user?.id });
     next(error);
   }
 };
@@ -148,6 +151,7 @@ exports.uploadResume = async (req, res, next) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    logger.error('Error in uploadResume controller', { error: error.message, userId: req.user?.id });
     next(error);
   }
 }; 

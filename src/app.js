@@ -3,11 +3,24 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
+const path = require('path');
 
 const apiRouter = require('./api'); // Updated to use the new version router
 const errorHandler = require('./shared/middleware/error.middleware');
 const requestLogger = require('./shared/middleware/logger.middleware');
 const logger = require('./shared/utils/logger');
+
+// Import project routes
+const projectRoutes = require('./modules/projects/routes');
+
+// Import security routes
+const securityRoutes = require('./modules/security/routes');
+
+// Import settings routes
+const settingsRoutes = require('./modules/settings/routes');
+
+// Import websocket routes
+const websocketRoutes = require('./modules/websocket/routes');
 
 const app = express();
 
@@ -27,8 +40,24 @@ app.use(morgan('combined', { stream: logger.stream })); // HTTP request logging
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve uploaded files statically
+const uploadsPath = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+
 // API Routes - using the new versioning router
 app.use('/api', apiRouter);
+
+// Register project routes
+app.use('/api/projects', projectRoutes);
+
+// Register security routes
+app.use('/api/security', securityRoutes);
+
+// Register settings routes
+app.use('/api/settings', settingsRoutes);
+
+// Register websocket routes
+app.use('/api/websocket', websocketRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

@@ -1,35 +1,49 @@
 /**
  * WebSocket connection model
  */
-const { DataTypes } = require('sequelize');
-const sequelize = require('../../../shared/database').getSequelize();
+const { DataTypes, Model } = require('sequelize');
+const { sequelize } = require('../../../shared/database');
 
-/**
- * WebSocketConnection model
- */
-const WebSocketConnection = sequelize.define(
-  'websocket_connection',
+class WebSocketConnection extends Model {}
+
+WebSocketConnection.init(
   {
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
     },
-    connection_id: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      unique: true
-    },
     user_id: {
-      type: DataTypes.UUID,
-      allowNull: false
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id'
+      },
+      onDelete: 'CASCADE'
     },
-    client_ip: {
+    connection_id: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      unique: true,
+      validate: {
+        len: [10, 100]
+      }
+    },
+    status: {
+      type: DataTypes.ENUM('connected', 'disconnected', 'idle'),
+      allowNull: false,
+      defaultValue: 'connected'
+    },
+    ip_address: {
       type: DataTypes.STRING(45),
-      allowNull: true
+      allowNull: true,
+      validate: {
+        is: /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]+$/i
+      }
     },
     user_agent: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true
     },
     connected_at: {
@@ -37,33 +51,60 @@ const WebSocketConnection = sequelize.define(
       allowNull: false,
       defaultValue: DataTypes.NOW
     },
-    disconnected_at: {
+    last_heartbeat: {
       type: DataTypes.DATE,
       allowNull: true
     },
-    is_active: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: true
+    disconnected_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      validate: {
+        isAfterConnected(value) {
+          if (value && this.connected_at && value < this.connected_at) {
+            throw new Error('Disconnected time must be after connected time');
+          }
+        }
+      }
     },
-    metadata: {
-      type: DataTypes.JSONB,
+    created_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW
+    },
+    deleted_at: {
+      type: DataTypes.DATE,
       allowNull: true
     }
   },
   {
+    sequelize,
+    modelName: 'WebSocketConnection',
     tableName: 'websocket_connections',
     timestamps: true,
-    underscored: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    deletedAt: 'deleted_at',
+    paranoid: true,
     indexes: [
       {
+        name: 'idx_websocket_connections_user_id',
         fields: ['user_id']
       },
       {
-        fields: ['connection_id']
+        name: 'idx_websocket_connections_connection_id',
+        fields: ['connection_id'],
+        unique: true
       },
       {
-        fields: ['is_active']
+        name: 'idx_websocket_connections_status',
+        fields: ['status']
+      },
+      {
+        name: 'idx_websocket_connections_connected_at',
+        fields: ['connected_at']
       }
     ]
   }

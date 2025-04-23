@@ -35,20 +35,19 @@ exports.requestPasswordReset = async (req, res, next) => {
       throw new AppError('Too many reset requests. Please try again later.', 429, 'RATE_002');
     }
     
-    // Delete any existing expired tokens for this user
-    const now = new Date();
+    // Delete any existing tokens for this user
     await PasswordResetToken.destroy({
-      where: { 
-        user_id: user.id,
-        created_at: { $lt: new Date(now - 60 * 60 * 1000) } // Older than 1 hour
-      }
+      where: { user_id: user.id }
     });
     
     // Create new reset token
     const token = uuidv4();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
+    
     await PasswordResetToken.create({
       user_id: user.id,
-      token
+      token,
+      expires_at: expiresAt
     });
     
     // In a real application, you would send an email here with the reset link
@@ -83,12 +82,9 @@ exports.confirmPasswordReset = async (req, res, next) => {
       throw new AppError('Invalid reset token', 400, 'AUTH_012');
     }
     
-    // Check if token is expired (1 hour)
+    // Check if token is expired
     const now = new Date();
-    const tokenCreatedAt = new Date(resetToken.created_at);
-    const tokenExpiration = new Date(tokenCreatedAt.getTime() + 60 * 60 * 1000);
-    
-    if (now > tokenExpiration) {
+    if (now > new Date(resetToken.expires_at)) {
       throw new AppError('Token expired', 400, 'AUTH_013');
     }
     
@@ -96,31 +92,26 @@ exports.confirmPasswordReset = async (req, res, next) => {
     const user = await User.findByPk(resetToken.user_id);
     
     if (!user) {
-      throw new AppError('User not found', 404, 'NOT_001');
+      throw new AppError('User not found', 404, 'AUTH_001');
     }
     
-    // Validate password format and history
+    // Validate password
     authService.validatePasswordStrength(newPassword);
-    await authService.validatePasswordHistory(newPassword, user.password_history);
     
-    // Hash new password
-    const salt = await bcrypt.genSalt(12);
-    const passwordHash = await bcrypt.hash(newPassword, salt);
-    
-    // Update password history
-    let passwordHistory = user.password_history || [];
-    passwordHistory.unshift(passwordHash);
-    
-    // Keep only last 5 passwords
-    if (passwordHistory.length > 5) {
-      passwordHistory = passwordHistory.slice(0, 5);
+    // Check if new password is the same as current
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new AppError('New password must be different from current password', 400, 'AUTH_014');
     }
+    
+    // Generate new salt and hash password
+    const salt = await bcrypt.genSalt(12);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
     
     // Update user password
-    user.password_hash = passwordHash;
-    user.password_history = passwordHistory;
-    user.password_updated_at = new Date();
-    user.failed_login_attempts = 0;
+    user.password = hashedPassword;
+    user.password_salt = salt;
+    user.login_attempts = 0;
     user.locked_until = null;
     await user.save();
     

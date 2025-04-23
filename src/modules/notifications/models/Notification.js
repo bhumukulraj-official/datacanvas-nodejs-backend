@@ -20,12 +20,15 @@ Notification.init(
       onDelete: 'CASCADE',
     },
     type: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.ENUM('system', 'user', 'security', 'content', 'account', 'project', 'billing', 'social'),
       allowNull: false,
     },
     title: {
-      type: DataTypes.STRING(200),
+      type: DataTypes.STRING(100),
       allowNull: false,
+      validate: {
+        len: [2, 100]
+      }
     },
     message: {
       type: DataTypes.TEXT,
@@ -40,13 +43,29 @@ Notification.init(
       allowNull: true,
     },
     priority: {
-      type: DataTypes.ENUM('low', 'medium', 'high'),
+      type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
       defaultValue: 'medium',
+    },
+    status: {
+      type: DataTypes.ENUM('unread', 'read', 'archived'),
+      defaultValue: 'unread',
+    },
+    metadata: {
+      type: DataTypes.JSONB,
+      defaultValue: {},
     },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    }
   },
   {
     sequelize,
@@ -54,7 +73,9 @@ Notification.init(
     tableName: 'notifications',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: false,
+    updatedAt: 'updated_at',
+    deletedAt: 'deleted_at',
+    paranoid: true,
     indexes: [
       {
         name: 'idx_notifications_user_id',
@@ -68,8 +89,16 @@ Notification.init(
         name: 'idx_notifications_category',
         fields: ['category'],
       },
+      {
+        name: 'idx_notifications_status',
+        fields: ['status'],
+      },
+      {
+        name: 'idx_notifications_type',
+        fields: ['type'],
+      },
     ],
   }
 );
 
-module.exports = Notification; 
+module.exports = { Notification }; 

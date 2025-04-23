@@ -23,12 +23,9 @@ exports.verifyEmail = async (req, res, next) => {
       throw new AppError('Invalid verification token', 400, 'AUTH_007');
     }
     
-    // Check if token is expired (24 hours)
+    // Check if token is expired
     const now = new Date();
-    const tokenCreatedAt = new Date(verificationToken.created_at);
-    const tokenExpiration = new Date(tokenCreatedAt.getTime() + 24 * 60 * 60 * 1000);
-    
-    if (now > tokenExpiration) {
+    if (now > new Date(verificationToken.expires_at)) {
       throw new AppError('Token expired', 400, 'AUTH_008');
     }
     
@@ -36,10 +33,10 @@ exports.verifyEmail = async (req, res, next) => {
     const user = await User.findByPk(verificationToken.user_id);
     
     if (!user) {
-      throw new AppError('User not found', 404, 'NOT_001');
+      throw new AppError('User not found', 404, 'AUTH_001');
     }
     
-    user.email_verified = true;
+    user.is_email_verified = true;
     await user.save();
     
     // Delete the verification token
@@ -70,7 +67,7 @@ exports.resendVerification = async (req, res, next) => {
       throw new AppError('Email not found', 404, 'AUTH_009');
     }
     
-    if (user.email_verified) {
+    if (user.is_email_verified) {
       throw new AppError('Email already verified', 400, 'AUTH_010');
     }
     
@@ -81,9 +78,12 @@ exports.resendVerification = async (req, res, next) => {
     
     // Create new verification token
     const token = uuidv4();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+    
     await EmailVerificationToken.create({
       user_id: user.id,
-      token
+      token,
+      expires_at: expiresAt
     });
     
     // In a real application, you would send an email here

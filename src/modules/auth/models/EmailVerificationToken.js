@@ -6,9 +6,9 @@ class EmailVerificationToken extends Model {}
 EmailVerificationToken.init(
   {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
-      autoIncrement: true,
     },
     user_id: {
       type: DataTypes.INTEGER,
@@ -23,11 +23,29 @@ EmailVerificationToken.init(
       type: DataTypes.STRING(255),
       allowNull: false,
       unique: true,
+      validate: {
+        len: [32, 255]
+      }
+    },
+    expires_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      validate: {
+        isAfterCreation(value) {
+          if (new Date(value) <= new Date()) {
+            throw new Error('Expiry date must be in the future');
+          }
+        }
+      }
     },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    updated_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    }
   },
   {
     sequelize,
@@ -35,7 +53,7 @@ EmailVerificationToken.init(
     tableName: 'email_verification_tokens',
     timestamps: true,
     createdAt: 'created_at',
-    updatedAt: false,
+    updatedAt: 'updated_at',
     indexes: [
       {
         name: 'idx_email_verification_tokens_user_id',
@@ -43,10 +61,24 @@ EmailVerificationToken.init(
       },
       {
         name: 'idx_email_verification_tokens_token',
+        unique: true,
         fields: ['token'],
       },
+      {
+        name: 'idx_email_verification_tokens_expires_at',
+        fields: ['expires_at'],
+      }
     ],
   }
 );
+
+// Define associations
+EmailVerificationToken.associate = (models) => {
+  EmailVerificationToken.belongsTo(models.User, {
+    foreignKey: 'user_id',
+    as: 'user',
+    onDelete: 'CASCADE'
+  });
+};
 
 module.exports = EmailVerificationToken; 

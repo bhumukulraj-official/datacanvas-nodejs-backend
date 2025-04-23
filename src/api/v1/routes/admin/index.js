@@ -4,11 +4,13 @@ const router = express.Router();
 // Import admin route modules
 const projectRoutes = require('../../../../modules/projects/routes/admin');
 const blogRoutes = require('../../../../modules/blog/routes/admin');
+const contactRoutes = require('../../../../modules/contact/routes/admin');
 // Import other admin route modules as needed
 
 // Register admin routes
 router.use('/projects', projectRoutes);
 router.use('/blog', blogRoutes);
+router.use('/contact', contactRoutes);
 
 // Admin health check
 router.get('/health', (req, res) => {

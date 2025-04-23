@@ -6,6 +6,13 @@ exports.validateRegister = validate([
   body('email')
     .isEmail()
     .withMessage('Please provide a valid email address'),
+  body('username')
+    .notEmpty()
+    .withMessage('Username is required')
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Username must be between 3 and 50 characters')
+    .matches(/^[a-zA-Z0-9_-]{3,50}$/)
+    .withMessage('Username can only contain letters, numbers, underscores and hyphens'),
   body('password')
     .isLength({ min: 8 })
     .withMessage('Password must be at least 8 characters long')
@@ -17,22 +24,26 @@ exports.validateRegister = validate([
     .withMessage('Password must contain at least one number')
     .matches(/[\W_]/)
     .withMessage('Password must contain at least one special character'),
-  body('name')
+  body('first_name')
     .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ max: 100 })
-    .withMessage('Name cannot exceed 100 characters'),
+    .withMessage('First name is required')
+    .isLength({ max: 50 })
+    .withMessage('First name cannot exceed 50 characters'),
+  body('last_name')
+    .optional()
+    .isLength({ max: 50 })
+    .withMessage('Last name cannot exceed 50 characters'),
   body('role')
     .optional()
-    .isIn(['admin', 'user'])
-    .withMessage('Role must be either admin or user'),
+    .isIn(['admin', 'editor', 'user'])
+    .withMessage('Role must be either admin, editor or user'),
 ]);
 
 // Login validation
 exports.validateLogin = validate([
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email address'),
+  body('emailOrUsername')
+    .notEmpty()
+    .withMessage('Email or username is required'),
   body('password')
     .notEmpty()
     .withMessage('Password is required'),

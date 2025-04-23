@@ -1,5 +1,6 @@
 const logger = require('../../../shared/utils/logger');
 const messageService = require('./message.service');
+const { Notification } = require('../../notifications/models/Notification');
 
 class NotificationService {
   constructor() {
@@ -24,6 +25,32 @@ class NotificationService {
         requiresAck: options.requiresAck || false,
         expiresAt: options.expiresAt || null
       };
+
+      // If no dbId is provided, store notification in database
+      if (!notification.dbId && options.persistToDatabase !== false) {
+        try {
+          // Only create a database record if this isn't referencing an existing notification
+          const dbNotification = await Notification.create({
+            user_id: parseInt(userId, 10),
+            type: notification.type || 'system',
+            title: notification.title,
+            message: notification.message,
+            read: false,
+            category: notification.category,
+            priority: notification.priority || 'medium',
+            status: 'unread',
+            metadata: notification.metadata || {}
+          });
+          
+          // Add database ID to notification
+          notificationData.dbId = dbNotification.id;
+        } catch (dbError) {
+          logger.error('Failed to store notification in database', {
+            error: dbError.message,
+            userId,
+          });
+        }
+      }
 
       // If acknowledgment is required, track the notification
       if (options.requiresAck) {
@@ -67,6 +94,35 @@ class NotificationService {
       // Send notification through WebSocket
       messageService.broadcast('notification', notificationData);
 
+      // If we should persist to database, we'll need to get all connected users
+      if (options.persistToDatabase !== false) {
+        try {
+          // Get all connected users
+          const connectedUsers = messageService.getConnectedUserIds();
+          
+          // Create bulk notifications in database
+          if (connectedUsers.length > 0) {
+            await Notification.bulkCreate(
+              connectedUsers.map(connUserId => ({
+                user_id: parseInt(connUserId, 10),
+                type: notification.type || 'system',
+                title: notification.title,
+                message: notification.message,
+                read: false,
+                category: notification.category,
+                priority: notification.priority || 'medium',
+                status: 'unread',
+                metadata: notification.metadata || {}
+              }))
+            );
+          }
+        } catch (dbError) {
+          logger.error('Failed to store broadcast notifications in database', {
+            error: dbError.message
+          });
+        }
+      }
+
       logger.info('Broadcast notification sent:', {
         notificationId,
         type: notification.type
@@ -94,6 +150,30 @@ class NotificationService {
           notificationId
         });
         return false;
+      }
+
+      // Get notification data to check if it has a database ID
+      const notificationData = userPending.get(notificationId);
+      
+      // If this notification has a database ID, mark it as read
+      if (notificationData.dbId) {
+        try {
+          await Notification.update(
+            { read: true, status: 'read' },
+            {
+              where: {
+                id: notificationData.dbId,
+                user_id: parseInt(userId, 10)
+              }
+            }
+          );
+        } catch (dbError) {
+          logger.error('Failed to update notification in database', {
+            error: dbError.message,
+            notificationId: notificationData.dbId,
+            userId
+          });
+        }
       }
 
       // Remove from pending notifications

@@ -12,6 +12,9 @@ const authRoutes = require('../../../modules/auth/routes/auth.routes');
 const profileRoutes = require('../../../modules/profile/routes');
 const projectRoutes = require('../../../modules/projects/routes');
 const blogRoutes = require('../../../modules/blog/routes');
+const contactRoutes = require('../../../modules/contact/routes');
+const mediaRoutes = require('../../../modules/media/routes');
+const notificationRoutes = require('../../../modules/notifications/routes');
 const adminRoutes = require('./admin');
 // Import other route modules as needed
 
@@ -48,6 +51,9 @@ router.use('/auth', authRoutes);
 router.use('/profile', profileRoutes);
 router.use('/projects', projectRoutes);
 router.use('/blog', blogRoutes);
+router.use('/contact', contactRoutes);
+router.use('/media', mediaRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
 // Register other routes as needed
 
@@ -65,6 +71,9 @@ router.get('/version', (req, res) => {
         { path: '/profile', description: 'User profile management' },
         { path: '/projects', description: 'Project management' },
         { path: '/blog', description: 'Blog post management' },
+        { path: '/contact', description: 'Contact form submission' },
+        { path: '/media', description: 'Media management' },
+        { path: '/notifications', description: 'Notification management' },
         { path: '/admin', description: 'Admin operations' }
       ]
     }

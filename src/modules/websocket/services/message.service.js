@@ -182,6 +182,23 @@ class MessageService {
       notificationId: payload.notificationId
     });
   }
+
+  /**
+   * Get array of connected user IDs
+   * @returns {Array} Array of user IDs
+   */
+  getConnectedUserIds() {
+    const userIds = new Set();
+    
+    // Iterate through all clients to collect unique user IDs
+    this.wss.clients.forEach(client => {
+      if (client.userId) {
+        userIds.add(client.userId);
+      }
+    });
+    
+    return Array.from(userIds);
+  }
 }
 
 module.exports = new MessageService(); 
