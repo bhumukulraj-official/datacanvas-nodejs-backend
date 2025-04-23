@@ -18,11 +18,18 @@ router.get(
   testimonialController.getAllTestimonials
 );
 
-// Get testimonial by ID
+// Get testimonial statistics
 router.get(
-  '/:id',
-  validate(testimonialValidation.getTestimonialById),
-  testimonialController.getTestimonialById
+  '/statistics',
+  validate(testimonialValidation.getTestimonialStatistics),
+  testimonialController.getTestimonialStatistics
+);
+
+// Export testimonials
+router.get(
+  '/export',
+  validate(testimonialValidation.exportTestimonials),
+  testimonialController.exportTestimonials
 );
 
 // Get featured testimonials
@@ -37,6 +44,41 @@ router.get(
   '/user/:userId/featured',
   validate(testimonialValidation.getFeaturedTestimonials),
   testimonialController.getFeaturedTestimonials
+);
+
+// Bulk create testimonials
+router.post(
+  '/bulk',
+  validate(testimonialValidation.bulkCreateTestimonials),
+  testimonialController.bulkCreateTestimonials
+);
+
+// Bulk update testimonials
+router.patch(
+  '/bulk',
+  validate(testimonialValidation.bulkUpdateTestimonials),
+  testimonialController.bulkUpdateTestimonials
+);
+
+// Bulk delete testimonials
+router.delete(
+  '/bulk',
+  validate(testimonialValidation.bulkDeleteTestimonials),
+  testimonialController.bulkDeleteTestimonials
+);
+
+// Update testimonial order
+router.post(
+  '/order',
+  validate(testimonialValidation.updateTestimonialOrder),
+  testimonialController.updateTestimonialOrder
+);
+
+// Get testimonial by ID - This must come AFTER all other routes with specific paths
+router.get(
+  '/:id',
+  validate(testimonialValidation.getTestimonialById),
+  testimonialController.getTestimonialById
 );
 
 // Create new testimonial
@@ -65,13 +107,6 @@ router.patch(
   '/:id/status',
   validate(testimonialValidation.updateTestimonialStatus),
   testimonialController.updateTestimonialStatus
-);
-
-// Update testimonial order
-router.post(
-  '/order',
-  validate(testimonialValidation.updateTestimonialOrder),
-  testimonialController.updateTestimonialOrder
 );
 
 module.exports = router; 
