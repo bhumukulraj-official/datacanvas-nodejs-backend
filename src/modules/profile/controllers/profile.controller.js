@@ -154,4 +154,139 @@ exports.uploadResume = async (req, res, next) => {
     logger.error('Error in uploadResume controller', { error: error.message, userId: req.user?.id });
     next(error);
   }
+};
+
+/**
+ * @api {delete} /api/v1/profile/avatar Delete profile avatar
+ * @apiName DeleteAvatar
+ * @apiGroup Profile
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Empty object
+ * @apiSuccess {String} message Success message
+ * @apiSuccess {String} timestamp Operation timestamp
+ */
+exports.deleteAvatar = async (req, res, next) => {
+  try {
+    // Get user ID from the authenticated user
+    const userId = req.user.id;
+    
+    // Delete avatar
+    await profileService.deleteAvatar(userId);
+    
+    return res.status(200).json({
+      success: true,
+      data: {},
+      message: 'Avatar deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error in deleteAvatar controller', { error: error.message, userId: req.user?.id });
+    next(error);
+  }
+};
+
+/**
+ * @api {delete} /api/v1/profile/resume Delete resume
+ * @apiName DeleteResume
+ * @apiGroup Profile
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Empty object
+ * @apiSuccess {String} message Success message
+ * @apiSuccess {String} timestamp Operation timestamp
+ */
+exports.deleteResume = async (req, res, next) => {
+  try {
+    // Get user ID from the authenticated user
+    const userId = req.user.id;
+    
+    // Delete resume
+    await profileService.deleteResume(userId);
+    
+    return res.status(200).json({
+      success: true,
+      data: {},
+      message: 'Resume deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error in deleteResume controller', { error: error.message, userId: req.user?.id });
+    next(error);
+  }
+};
+
+/**
+ * @api {get} /api/v1/profiles/:username Get public profile
+ * @apiName GetPublicProfile
+ * @apiGroup Profile
+ * @apiVersion 1.0.0
+ * 
+ * @apiParam {String} username Username to fetch profile for
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Profile data
+ * @apiSuccess {String} message Success message
+ * @apiSuccess {String} timestamp Operation timestamp
+ */
+exports.getPublicProfile = async (req, res, next) => {
+  try {
+    // Get username from request parameters
+    const { username } = req.params;
+    
+    // Get public profile data
+    const profileData = await profileService.getPublicProfileByUsername(username);
+    
+    return res.status(200).json({
+      success: true,
+      data: profileData,
+      message: 'Public profile retrieved successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error in getPublicProfile controller', { error: error.message, username: req.params.username });
+    next(error);
+  }
+};
+
+/**
+ * @api {get} /api/v1/profile/availability/:username Check username availability
+ * @apiName CheckUsernameAvailability
+ * @apiGroup Profile
+ * @apiVersion 1.0.0
+ * 
+ * @apiParam {String} username Username to check availability for
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Availability data
+ * @apiSuccess {Boolean} data.available Whether the username is available
+ * @apiSuccess {String} message Success message
+ * @apiSuccess {String} timestamp Operation timestamp
+ */
+exports.checkUsernameAvailability = async (req, res, next) => {
+  try {
+    // Get username from request parameters
+    const { username } = req.params;
+    
+    // Check availability
+    const isAvailable = await profileService.checkUsernameAvailability(username);
+    
+    return res.status(200).json({
+      success: true,
+      data: {
+        available: isAvailable
+      },
+      message: isAvailable ? 'Username is available' : 'Username is not available',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    logger.error('Error in checkUsernameAvailability controller', { error: error.message, username: req.params.username });
+    next(error);
+  }
 }; 

@@ -1,4 +1,4 @@
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const { ValidationError } = require('../../../shared/errors');
 
 /**
@@ -21,14 +21,6 @@ exports.updateProfile = [
     .isObject()
     .withMessage('Personal info must be an object'),
   
-  body('personalInfo.name')
-    .isString()
-    .trim()
-    .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ max: 100 })
-    .withMessage('Name must be at most 100 characters'),
-  
   body('personalInfo.title')
     .optional()
     .isString()
@@ -42,11 +34,6 @@ exports.updateProfile = [
     .trim()
     .isLength({ max: 1000 })
     .withMessage('Bio must be at most 1000 characters'),
-  
-  body('personalInfo.email')
-    .isEmail()
-    .withMessage('Valid email is required')
-    .normalizeEmail(),
   
   body('personalInfo.phone')
     .optional()
@@ -119,5 +106,49 @@ exports.uploadResume = [
  * Validator for getting profile - no validation needed
  */
 exports.getProfile = [
+  validateRequest
+];
+
+/**
+ * Validator for deleting avatar
+ */
+exports.deleteAvatar = [
+  validateRequest
+];
+
+/**
+ * Validator for deleting resume
+ */
+exports.deleteResume = [
+  validateRequest
+];
+
+/**
+ * Validator for getting public profile by username
+ */
+exports.getPublicProfile = [
+  param('username')
+    .isString()
+    .trim()
+    .notEmpty()
+    .withMessage('Username is required')
+    .matches(/^[a-zA-Z0-9_-]{3,50}$/)
+    .withMessage('Username must be alphanumeric with underscores or hyphens, 3-50 chars'),
+  
+  validateRequest
+];
+
+/**
+ * Validator for checking username availability
+ */
+exports.checkUsernameAvailability = [
+  param('username')
+    .isString()
+    .trim()
+    .notEmpty()
+    .withMessage('Username is required')
+    .matches(/^[a-zA-Z0-9_-]{3,50}$/)
+    .withMessage('Username must be alphanumeric with underscores or hyphens, 3-50 chars'),
+  
   validateRequest
 ]; 

@@ -56,4 +56,50 @@ router.post(
   controller.uploadResume
 );
 
+/**
+ * @api {delete} /api/v1/profile/avatar Delete profile avatar
+ * @apiDescription Remove user's profile avatar
+ * @apiVersion 1.0.0
+ */
+router.delete(
+  '/avatar',
+  auth.requireAuth,
+  validator.deleteAvatar,
+  controller.deleteAvatar
+);
+
+/**
+ * @api {delete} /api/v1/profile/resume Delete resume
+ * @apiDescription Remove user's resume
+ * @apiVersion 1.0.0
+ */
+router.delete(
+  '/resume',
+  auth.requireAuth,
+  validator.deleteResume,
+  controller.deleteResume
+);
+
+/**
+ * @api {get} /api/v1/profiles/:username Get public profile
+ * @apiDescription Retrieve public profile by username
+ * @apiVersion 1.0.0
+ */
+router.get(
+  '/public/:username',
+  validator.getPublicProfile,
+  controller.getPublicProfile
+);
+
+/**
+ * @api {get} /api/v1/profile/availability/:username Check username availability
+ * @apiDescription Check if a username is available for use
+ * @apiVersion 1.0.0
+ */
+router.get(
+  '/availability/:username',
+  validator.checkUsernameAvailability,
+  controller.checkUsernameAvailability
+);
+
 module.exports = router; 

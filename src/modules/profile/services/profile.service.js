@@ -7,6 +7,8 @@ const cache = require('../../../shared/utils/cache');
 const config = require('../../../shared/config');
 const logger = require('../../../shared/utils/logger');
 const Profile = require('../models/Profile');
+const User = require('../../auth/models/User'); // Import User model for joined operations
+const sequelize = require('../../../shared/database').sequelize; // For transactions
 
 /**
  * Get user profile by user ID
@@ -15,20 +17,30 @@ const Profile = require('../models/Profile');
  */
 exports.getProfileByUserId = async (userId) => {
   try {
-    const profile = await Profile.findOne({
-      where: { user_id: userId }
-    });
+    // Get both profile and user data (addressing data consistency)
+    const [profile, user] = await Promise.all([
+      Profile.findOne({
+        where: { user_id: userId }
+      }),
+      User.findOne({
+        where: { id: userId },
+        attributes: ['id', 'username', 'first_name', 'last_name', 'email', 'bio', 'avatar']
+      })
+    ]);
     
-    if (!profile) {
+    if (!profile || !user) {
       throw new NotFoundError('Profile not found');
     }
     
-    // Format the response according to API specification
+    // Format the response with consistent data (combining user and profile data)
     return {
       personalInfo: {
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
         title: profile.title,
-        bio: profile.bio,
-        avatar: profile.avatar_url,
+        bio: profile.bio || user.bio, // Use profile bio first, fallback to user bio
+        avatar: profile.avatar_url || user.avatar, // Use profile avatar first, fallback to user avatar
         phone: profile.phone,
         location: profile.location,
         website: profile.website
@@ -89,17 +101,33 @@ exports.createProfile = async (userId, profileData) => {
  * @returns {Promise<Object>} Updated profile
  */
 exports.updateProfile = async (userId, profileData) => {
+  const transaction = await sequelize.transaction();
+  
   try {
-    const profile = await Profile.findOne({
-      where: { user_id: userId }
-    });
+    // Get existing profile and user data
+    const [profile, user] = await Promise.all([
+      Profile.findOne({
+        where: { user_id: userId },
+        transaction
+      }),
+      User.findOne({
+        where: { id: userId },
+        transaction
+      })
+    ]);
     
     if (!profile) {
+      await transaction.rollback();
       throw new NotFoundError('Profile not found');
     }
     
+    if (!user) {
+      await transaction.rollback();
+      throw new NotFoundError('User not found');
+    }
+    
     // Update profile fields with proper field mapping
-    const updateData = {
+    const updateProfileData = {
       title: profileData.personalInfo?.title !== undefined ? profileData.personalInfo.title : profile.title,
       bio: profileData.personalInfo?.bio !== undefined ? profileData.personalInfo.bio : profile.bio,
       phone: profileData.personalInfo?.phone !== undefined ? profileData.personalInfo.phone : profile.phone,
@@ -108,13 +136,21 @@ exports.updateProfile = async (userId, profileData) => {
       social_links: profileData.socialLinks || profile.social_links
     };
     
-    await profile.update(updateData);
+    await profile.update(updateProfileData, { transaction });
+    
+    // Also update matching fields in User model for consistency
+    if (profileData.personalInfo?.bio !== undefined) {
+      await user.update({ bio: profileData.personalInfo.bio }, { transaction });
+    }
+    
+    await transaction.commit();
     
     // Invalidate cache
     await cache.del(`profiles:${userId}`);
     
     return this.getProfileByUserId(userId);
   } catch (error) {
+    await transaction.rollback();
     logger.error('Error updating profile', { userId, error: error.message });
     throw error;
   }
@@ -127,12 +163,22 @@ exports.updateProfile = async (userId, profileData) => {
  * @returns {Promise<Object>} Avatar URLs
  */
 exports.updateAvatar = async (userId, file) => {
+  const transaction = await sequelize.transaction();
+  
   try {
-    const profile = await Profile.findOne({
-      where: { user_id: userId }
-    });
+    const [profile, user] = await Promise.all([
+      Profile.findOne({
+        where: { user_id: userId },
+        transaction
+      }),
+      User.findOne({
+        where: { id: userId },
+        transaction
+      })
+    ]);
     
     if (!profile) {
+      await transaction.rollback();
       throw new NotFoundError('Profile not found');
     }
     
@@ -180,7 +226,16 @@ exports.updateAvatar = async (userId, file) => {
     // Update profile with new avatar URL
     await profile.update({
       avatar_url: avatarUrl
-    });
+    }, { transaction });
+    
+    // Also update User model avatar for consistency
+    if (user) {
+      await user.update({
+        avatar: avatarUrl
+      }, { transaction });
+    }
+    
+    await transaction.commit();
     
     // Invalidate cache
     await cache.del(`profiles:${userId}`);
@@ -190,6 +245,7 @@ exports.updateAvatar = async (userId, file) => {
       thumbnailUrl
     };
   } catch (error) {
+    await transaction.rollback();
     logger.error('Error updating avatar', { userId, error: error.message });
     throw error;
   }
@@ -246,9 +302,192 @@ exports.updateResume = async (userId, file) => {
   }
 };
 
+/**
+ * Delete avatar
+ * @param {number} userId - User ID
+ * @returns {Promise<void>}
+ */
+exports.deleteAvatar = async (userId) => {
+  const transaction = await sequelize.transaction();
+  
+  try {
+    const [profile, user] = await Promise.all([
+      Profile.findOne({
+        where: { user_id: userId },
+        transaction
+      }),
+      User.findOne({
+        where: { id: userId },
+        transaction
+      })
+    ]);
+    
+    if (!profile) {
+      await transaction.rollback();
+      throw new NotFoundError('Profile not found');
+    }
+    
+    // Delete avatar file if exists
+    if (profile.avatar_url) {
+      const baseUrl = config.app.url || 'http://localhost:3000';
+      const avatarPath = profile.avatar_url.replace(`${baseUrl}/uploads/`, path.join(process.cwd(), 'uploads/'));
+      try {
+        if (fs.existsSync(avatarPath)) {
+          fs.unlinkSync(avatarPath);
+        }
+        
+        // Also try to delete thumbnail
+        const thumbPath = avatarPath.replace(path.basename(avatarPath), `thumb_${path.basename(avatarPath)}`);
+        if (fs.existsSync(thumbPath)) {
+          fs.unlinkSync(thumbPath);
+        }
+      } catch (error) {
+        logger.error(`Error deleting avatar file: ${error.message}`, { userId, path: avatarPath });
+        // Continue execution even if deletion fails
+      }
+    }
+    
+    // Update profile with null avatar URL
+    await profile.update({
+      avatar_url: null
+    }, { transaction });
+    
+    // Also update User model avatar for consistency
+    if (user) {
+      await user.update({
+        avatar: null
+      }, { transaction });
+    }
+    
+    await transaction.commit();
+    
+    // Invalidate cache
+    await cache.del(`profiles:${userId}`);
+  } catch (error) {
+    await transaction.rollback();
+    logger.error('Error deleting avatar', { userId, error: error.message });
+    throw error;
+  }
+};
+
+/**
+ * Delete resume
+ * @param {number} userId - User ID
+ * @returns {Promise<void>}
+ */
+exports.deleteResume = async (userId) => {
+  try {
+    const profile = await Profile.findOne({
+      where: { user_id: userId }
+    });
+    
+    if (!profile) {
+      throw new NotFoundError('Profile not found');
+    }
+    
+    // Delete resume file if exists
+    if (profile.resume_url) {
+      const baseUrl = config.app.url || 'http://localhost:3000';
+      const resumePath = profile.resume_url.replace(`${baseUrl}/uploads/`, path.join(process.cwd(), 'uploads/'));
+      try {
+        if (fs.existsSync(resumePath)) {
+          fs.unlinkSync(resumePath);
+        }
+      } catch (error) {
+        logger.error(`Error deleting resume file: ${error.message}`, { userId, path: resumePath });
+        // Continue execution even if deletion fails
+      }
+    }
+    
+    // Update profile with null resume URL
+    await profile.update({
+      resume_url: null
+    });
+    
+    // Invalidate cache
+    await cache.del(`profiles:${userId}`);
+  } catch (error) {
+    logger.error('Error deleting resume', { userId, error: error.message });
+    throw error;
+  }
+};
+
+/**
+ * Get public profile by username
+ * @param {string} username - Username
+ * @returns {Promise<Object>} Public profile data
+ */
+exports.getPublicProfileByUsername = async (username) => {
+  try {
+    // Find user by username
+    const user = await User.findOne({
+      where: { username },
+      attributes: ['id', 'username', 'first_name', 'last_name', 'bio', 'avatar']
+    });
+    
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+    
+    // Get associated profile
+    const profile = await Profile.findOne({
+      where: { user_id: user.id }
+    });
+    
+    if (!profile) {
+      throw new NotFoundError('Profile not found');
+    }
+    
+    // Format the response (only including public information)
+    return {
+      username: user.username,
+      personalInfo: {
+        firstName: user.first_name,
+        lastName: user.last_name,
+        title: profile.title,
+        bio: profile.bio || user.bio,
+        avatar: profile.avatar_url || user.avatar,
+        location: profile.location,
+        website: profile.website
+      },
+      socialLinks: profile.social_links || {}
+      // Note: Not including sensitive data like phone number or email
+    };
+  } catch (error) {
+    logger.error('Error fetching public profile', { username, error: error.message });
+    throw error;
+  }
+};
+
+/**
+ * Check username availability
+ * @param {string} username - Username to check
+ * @returns {Promise<boolean>} Whether the username is available
+ */
+exports.checkUsernameAvailability = async (username) => {
+  try {
+    const existingUser = await User.findOne({
+      where: { username }
+    });
+    
+    return !existingUser;
+  } catch (error) {
+    logger.error('Error checking username availability', { username, error: error.message });
+    throw error;
+  }
+};
+
 // Apply caching to getProfileByUserId
+const originalGetProfileByUserId = exports.getProfileByUserId;
 exports.getProfileByUserId = cache.cacheWrapper(
-  exports.getProfileByUserId,
-  'profiles',
-  7200 // 2 hours TTL
+  originalGetProfileByUserId,
+  (userId) => `profiles:${userId}`,
+  60 * 5 // Cache for 5 minutes
+);
+
+// Apply caching to getPublicProfileByUsername
+exports.getPublicProfileByUsername = cache.cacheWrapper(
+  exports.getPublicProfileByUsername,
+  (username) => `profiles:public:${username}`,
+  60 * 15 // Cache for 15 minutes
 ); 
