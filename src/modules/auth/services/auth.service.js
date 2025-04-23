@@ -6,6 +6,8 @@ const RefreshToken = require('../models/RefreshToken');
 const EmailVerificationToken = require('../models/EmailVerificationToken');
 const { AppError } = require('../../../shared/errors');
 const config = require('../../../shared/config');
+const logger = require('../../../shared/logger');
+const AuditLog = require('../models/AuditLog');
 
 class AuthService {
   /**
@@ -146,10 +148,10 @@ class AuthService {
     await user.save();
 
     // Generate JWT token
-    const { token, expiresIn } = this.generateJwtToken(user);
+    const { token, expiresIn } = this.generateJwtToken(user, { ip, userAgent });
     
     // Generate refresh token
-    const refreshToken = await this.generateRefreshToken(user.id);
+    const refreshToken = await this.generateRefreshToken(user.id, { ip, userAgent });
 
     // Return user object with tokens
     const userObj = user.toJSON();
@@ -168,12 +170,13 @@ class AuthService {
   /**
    * Refresh access token using refresh token
    * @param {string} refreshTokenString - Refresh token string
+   * @param {Object} deviceInfo - Device information for validation
    * @returns {Object} New JWT token pair
    */
-  async refreshToken(refreshTokenString) {
+  async refreshToken(refreshTokenString, deviceInfo = {}) {
     // Find refresh token
     const refreshTokenObj = await RefreshToken.findOne({
-      where: { token: refreshTokenString },
+      where: { token: refreshTokenString, is_revoked: false },
     });
 
     if (!refreshTokenObj) {
@@ -182,6 +185,11 @@ class AuthService {
 
     // Check if token is expired
     if (new Date(refreshTokenObj.expires_at) < new Date()) {
+      // Invalidate expired token
+      await RefreshToken.update(
+        { is_revoked: true },
+        { where: { id: refreshTokenObj.id } }
+      );
       throw new AppError('Refresh token expired', 401, 'AUTH_004');
     }
 
@@ -201,16 +209,56 @@ class AuthService {
       };
       
       const message = statusMessages[user.status] || `Account is ${user.status}. Please contact support.`;
-      throw new AppError(message, 401, 'AUTH_016');
+      throw new AppError(message, 401, 'AUTH_015');
     }
 
+    // Verify the client context if possible
+    // Only do this check if we have both stored and current device info
+    if (refreshTokenObj.ip_address && deviceInfo.ip) {
+      // Simple IP verification (partial match for dynamic IPs)
+      const storedIpPrefix = refreshTokenObj.ip_address.split('.').slice(0, 2).join('.');
+      const currentIpPrefix = deviceInfo.ip.split('.').slice(0, 2).join('.');
+      
+      if (storedIpPrefix !== currentIpPrefix) {
+        // Log suspicious activity
+        logger.warn('Suspicious refresh token use: IP mismatch', {
+          userId: user.id,
+          tokenId: refreshTokenObj.id,
+          storedIp: refreshTokenObj.ip_address,
+          currentIp: deviceInfo.ip
+        });
+        
+        // Don't immediately fail but add to audit log for analysis
+        await AuditLog.create({
+          user_id: user.id,
+          action: 'SUSPICIOUS_TOKEN_REFRESH',
+          entity_type: 'refresh_token',
+          entity_id: refreshTokenObj.id,
+          description: 'IP address mismatch during token refresh',
+          metadata: {
+            stored_ip: refreshTokenObj.ip_address,
+            current_ip: deviceInfo.ip
+          },
+          ip_address: deviceInfo.ip
+        });
+      }
+    }
+
+    // Rotate the refresh token (issue a new one and invalidate the old one)
+    const newRefreshToken = await this.rotateRefreshToken(refreshTokenObj, deviceInfo);
+
     // Generate new JWT token
-    const { token, expiresIn } = this.generateJwtToken(user);
+    const { token, expiresIn } = this.generateJwtToken(user, deviceInfo);
+
+    // Update last login timestamp
+    user.last_login = new Date();
+    await user.save();
 
     return {
       token,
+      refreshToken: newRefreshToken.token,
       expiresIn,
-      tokenType: 'Bearer',
+      tokenType: 'Bearer'
     };
   }
 

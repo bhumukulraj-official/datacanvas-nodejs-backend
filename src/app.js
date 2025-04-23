@@ -1,6 +1,4 @@
 const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const path = require('path');
@@ -8,6 +6,8 @@ const path = require('path');
 const apiRouter = require('./api'); // Updated to use the new version router
 const errorHandler = require('./shared/middleware/error.middleware');
 const requestLogger = require('./shared/middleware/logger.middleware');
+const { securityHeaders, corsConfig, csrfProtection } = require('./shared/middleware/security.middleware');
+const { auditLog } = require('./shared/middleware/audit.middleware');
 const logger = require('./shared/utils/logger');
 
 // Import project routes
@@ -24,12 +24,10 @@ const websocketRoutes = require('./modules/websocket/routes');
 
 const app = express();
 
-// Security middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true,
-}));
+// Enhanced security middleware
+app.use(securityHeaders());
+app.use(corsConfig());
+app.use(csrfProtection);
 app.use(compression());
 
 // Logging middleware
@@ -39,6 +37,9 @@ app.use(morgan('combined', { stream: logger.stream })); // HTTP request logging
 // Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Enhanced audit logging
+app.use(auditLog);
 
 // Serve uploaded files statically
 const uploadsPath = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');

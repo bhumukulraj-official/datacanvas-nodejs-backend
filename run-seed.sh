@@ -32,6 +32,7 @@ SEEDERS=(
   "20250422022605000000021-seed-audit_logs.js"
   "20250422022605000000022-seed-websocket_connections.js"
   "20250422022605000000023-seed-websocket_messages.js"
+  "20250422022605000000024-seed-blog-posts-with-search-data.js"
 )
 
 TOTAL_SEEDERS=${#SEEDERS[@]}

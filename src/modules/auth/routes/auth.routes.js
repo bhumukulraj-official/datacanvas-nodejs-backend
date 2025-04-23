@@ -5,27 +5,35 @@ const emailController = require('../controllers/email.controller');
 const passwordController = require('../controllers/password.controller');
 const authValidator = require('../validators/auth.validator');
 const { authenticate } = require('../middleware/auth.middleware');
+const { authRateLimiter, accountRecoveryRateLimiter } = require('../../../shared/middleware/rate-limit.middleware');
+const { authSecurityHeaders } = require('../../../shared/middleware/security.middleware');
+
+// Import session routes
+const sessionRoutes = require('./session.routes');
+
+// Apply security headers to all auth routes
+router.use(authSecurityHeaders());
 
 /**
  * @route POST /api/v1/auth/register
  * @desc Register a new user
  * @access Public
  */
-router.post('/register', authValidator.validateRegister, authController.register);
+router.post('/register', authRateLimiter(), authValidator.validateRegister, authController.register);
 
 /**
  * @route POST /api/v1/auth/login
  * @desc Login a user
  * @access Public
  */
-router.post('/login', authValidator.validateLogin, authController.login);
+router.post('/login', authRateLimiter(), authValidator.validateLogin, authController.login);
 
 /**
  * @route POST /api/v1/auth/refresh
  * @desc Refresh access token
  * @access Public
  */
-router.post('/refresh', authValidator.validateRefreshToken, authController.refreshToken);
+router.post('/refresh', authRateLimiter(), authValidator.validateRefreshToken, authController.refreshToken);
 
 /**
  * @route POST /api/v1/auth/logout
@@ -60,6 +68,7 @@ router.post(
  */
 router.post(
   '/verify-email',
+  authRateLimiter(),
   authValidator.validateVerifyEmail,
   emailController.verifyEmail
 );
@@ -71,6 +80,7 @@ router.post(
  */
 router.post(
   '/resend-verification',
+  authRateLimiter(),
   authValidator.validateResendVerification,
   emailController.resendVerification
 );
@@ -82,6 +92,7 @@ router.post(
  */
 router.post(
   '/reset-password/request',
+  accountRecoveryRateLimiter(),
   authValidator.validateResetPasswordRequest,
   passwordController.requestPasswordReset
 );
@@ -93,8 +104,12 @@ router.post(
  */
 router.post(
   '/reset-password/confirm',
+  accountRecoveryRateLimiter(),
   authValidator.validateResetPasswordConfirm,
   passwordController.confirmPasswordReset
 );
+
+// Register session management routes
+router.use('/sessions', sessionRoutes);
 
 module.exports = router; 
