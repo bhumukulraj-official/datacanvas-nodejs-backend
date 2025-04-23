@@ -1,8 +1,9 @@
 /**
- * Export controllers
+ * Controllers Index
+ * Exports the unified settings controller
  */
-const settingController = require('./setting.controller');
+const settingsController = require('./settings.controller');
 
 module.exports = {
-  settingController
+  settingsController
 }; 

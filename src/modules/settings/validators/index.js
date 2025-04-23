@@ -1,8 +1,9 @@
 /**
- * Export validators
+ * Validators Index
+ * Exports the unified settings validators
  */
-const settingValidator = require('./setting.validator');
+const settingsValidator = require('./settings.validator');
 
 module.exports = {
-  settingValidator
+  settingsValidator
 }; 

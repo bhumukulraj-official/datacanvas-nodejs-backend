@@ -1,10 +1,15 @@
 /**
- * Export settings module
+ * Settings Module Index
+ * Exports the unified settings module components
  */
-const { settingRoutes } = require('./routes');
+const settingsRoutes = require('./routes');
+const { settingsController } = require('./controllers');
+const { settingsValidator } = require('./validators');
 const Setting = require('./models/Setting');
 
 module.exports = {
-  settingsRoutes: settingRoutes,
-  SettingModel: Setting
+  routes: settingsRoutes,
+  controllers: { settingsController },
+  validators: { settingsValidator },
+  models: { Setting }
 }; 
