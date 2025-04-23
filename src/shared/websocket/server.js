@@ -204,21 +204,35 @@ const setupWebSocketServer = (server, options = {}) => {
    * Send error message to client
    * @param {WebSocket} ws - WebSocket connection
    * @param {String} message - Error message
-   * @param {String} code - Error code
+   * @param {Number} code - Status code
+   * @private
    */
   const sendErrorMessage = (ws, message, code) => {
-    try {
-      ws.send(JSON.stringify({
-        type: 'error',
-        payload: {
-          code,
-          message,
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({
+          type: 'error',
+          error: {
+            message,
+            code
+          },
           timestamp: new Date().toISOString()
-        }
-      }));
-    } catch (error) {
-      logger.error(`Failed to send error message: ${error.message}`);
+        }));
+      } catch (error) {
+        logger.error(`Failed to send error message: ${error.message}`);
+      }
     }
+  };
+  
+  /**
+   * Validate client IP address against blocklist
+   * @param {String} ip - Client IP address
+   * @returns {Boolean} Whether IP is allowed
+   */
+  const validateIpAddress = (ip) => {
+    // Implementation would check against a blocklist or rate limit by IP
+    // This is a simplified example
+    return true;
   };
   
   // Set up heartbeat interval to detect dead connections
@@ -241,246 +255,324 @@ const setupWebSocketServer = (server, options = {}) => {
   
   // Handle HTTP upgrade requests to upgrade to WebSocket
   server.on('upgrade', async (request, socket, head) => {
+    const pathname = url.parse(request.url).pathname;
+    
+    // Only handle WebSocket connections on the configured path
+    if (pathname !== path) {
+      socket.destroy();
+      return;
+    }
+    
+    // Get client IP
+    const ip = request.headers['x-forwarded-for'] || 
+      request.connection.remoteAddress;
+    
+    // Validate IP address
+    if (!validateIpAddress(ip)) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    
+    // Parse query parameters to get token
+    const { query } = url.parse(request.url, true);
+    
     try {
-      const { pathname, query } = url.parse(request.url, true);
+      // Validate token
+      const user = await validateToken(query.token);
       
-      // Only handle WebSocket connections to configured path
-      if (pathname === path) {
-        try {
-          // Extract token from query parameter
-          const token = query.token;
-          
-          // Validate the token
-          if (!token) {
-            logger.warn('WebSocket connection attempt without token');
-            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-            socket.destroy();
+      // Authenticate WebSocket connection
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        // Generate unique connection ID
+        const connectionId = `ws-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Set client properties
+        ws.connectionId = connectionId;
+        ws.userId = user.sub;
+        ws.userRole = user.role;
+        ws.isAlive = true;
+        ws.isSendingMessage = false;
+        ws.connectedAt = new Date();
+        ws.lastActivityAt = new Date();
+        
+        // Create client metadata
+        const metadata = {
+          userAgent: request.headers['user-agent'],
+          ip,
+          origin: request.headers.origin
+        };
+        
+        // Subscribe to user's default channels
+        const userChannel = `user:${user.sub}`;
+        channelSubscriptions.set(connectionId, new Set([userChannel]));
+        
+        // Track message counts for rate limiting
+        if (rateLimiter) {
+          messageCounters.set(connectionId, 0);
+        }
+        
+        // Setup ping/pong for connection health check
+        const pingInterval = setInterval(() => {
+          if (ws.readyState !== WebSocket.OPEN) {
+            clearInterval(pingInterval);
             return;
           }
           
-          // Authenticate the connection
-          const user = await validateToken(token);
-          
-          // Extract client info for tracking
-          const clientInfo = {
-            ip: request.headers['x-forwarded-for'] || request.socket.remoteAddress,
-            userAgent: request.headers['user-agent'] || 'Unknown',
-            acceptLanguage: request.headers['accept-language'] || 'en-US'
-          };
-          
-          // Upgrade the connection
-          wss.handleUpgrade(request, socket, head, async (ws) => {
-            try {
-              // Create a unique connection ID
-              const connectionId = require('crypto').randomUUID();
-              
-              // Store connection info on ws object
-              ws.userId = user.sub;
-              ws.connectionId = connectionId;
-              ws.isAlive = true;
-              ws.isSendingMessage = false;
-              ws.userInfo = {
-                userId: user.sub,
-                role: user.role,
-                iat: user.iat
-              };
-              
-              // Create default channel subscriptions
-              channelSubscriptions.set(connectionId, new Set([
-                'public:announcements',
-                `user:${user.sub}`
-              ]));
-              
-              // Initialize message counter for rate limiting
-              if (rateLimiter) {
-                rateLimiter.registerClient(connectionId);
-              }
-              
-              // Set up WebSocket event handlers
-              ws.on('pong', () => {
-                ws.isAlive = true;
-              });
-              
-              ws.on('message', async (data) => {
-                try {
-                  // Check rate limit
-                  if (checkRateLimit(connectionId)) {
-                    sendErrorMessage(ws, 'Too many messages, please slow down', 'RATE_LIMITED');
-                    return;
-                  }
-                  
-                  // Track message for rate limiting
-                  trackMessage(connectionId);
-                  
-                  // Parse message (safely)
-                  let parsedMessage;
-                  try {
-                    parsedMessage = JSON.parse(data.toString());
-                  } catch (error) {
-                    sendErrorMessage(ws, 'Invalid message format', 'INVALID_MESSAGE');
-                    return;
-                  }
-                  
-                  // Handle subscription requests
-                  if (parsedMessage.type === 'subscribe' && parsedMessage.channel) {
-                    const channel = parsedMessage.channel;
-                    
-                    // Check authorization
-                    const isAuthorized = await authorizeChannelAccess(user.sub, channel);
-                    
-                    if (!isAuthorized) {
-                      logger.warn(`Unauthorized channel subscription attempt: ${channel}`, {
-                        userId: user.sub,
-                        connectionId,
-                        channel
-                      });
-                      
-                      sendErrorMessage(ws, 'Not authorized to subscribe to this channel', 'AUTHORIZATION_FAILED');
-                      return;
-                    }
-                    
-                    // Add subscription
-                    wss.subscribeToChannel(connectionId, channel);
-                    
-                    // Send confirmation
-                    ws.send(JSON.stringify({
-                      type: 'subscribe:success',
-                      payload: {
-                        channel,
-                        timestamp: new Date().toISOString()
-                      }
-                    }));
-                    
-                    return;
-                  }
-                  
-                  // Handle unsubscribe requests
-                  if (parsedMessage.type === 'unsubscribe' && parsedMessage.channel) {
-                    const channel = parsedMessage.channel;
-                    
-                    // Remove subscription
-                    wss.unsubscribeFromChannel(connectionId, channel);
-                    
-                    // Send confirmation
-                    ws.send(JSON.stringify({
-                      type: 'unsubscribe:success',
-                      payload: {
-                        channel,
-                        timestamp: new Date().toISOString()
-                      }
-                    }));
-                    
-                    return;
-                  }
-                  
-                  // Handle other message types through the message service
-                  if (typeof options.handleMessage === 'function') {
-                    await options.handleMessage(ws, data);
-                  }
-                } catch (error) {
-                  logger.error(`Error handling WebSocket message: ${error.message}`, {
-                    userId: user.sub,
-                    connectionId
-                  });
-                  
-                  sendErrorMessage(ws, 'Failed to process message', 'INTERNAL_ERROR');
-                }
-              });
-              
-              ws.on('close', (code, reason) => {
-                // Clean up resources
-                channelSubscriptions.delete(connectionId);
-                
-                if (rateLimiter) {
-                  rateLimiter.unregisterClient(connectionId);
-                }
-                
-                // Log the disconnection with reason
-                logger.debug(`WebSocket connection closed`, {
-                  userId: user.sub,
-                  connectionId,
-                  code,
-                  reason: reason.toString()
-                });
-                
-                // Call external handler if provided
-                if (typeof options.handleDisconnect === 'function') {
-                  options.handleDisconnect(connectionId, user.sub, code, reason.toString());
-                }
-              });
-              
-              ws.on('error', (error) => {
-                logger.error(`WebSocket error: ${error.message}`, {
-                  userId: user.sub,
-                  connectionId
-                });
-              });
-              
-              // Complete the connection
-              wss.emit('connection', ws);
-              
-              // Send welcome message
-              ws.send(JSON.stringify({
-                type: 'connection:established',
-                payload: {
-                  connectionId,
-                  userId: user.sub,
-                  channels: Array.from(channelSubscriptions.get(connectionId)),
-                  timestamp: new Date().toISOString()
-                }
-              }));
-              
-              // Log successful connection
-              logger.info(`WebSocket connection established`, {
-                userId: user.sub,
-                connectionId,
-                ip: clientInfo.ip
-              });
-              
-              // Call external connection handler if provided
-              if (typeof options.handleConnection === 'function') {
-                options.handleConnection(ws, user, clientInfo);
-              }
-            } catch (error) {
-              logger.error(`Failed to setup WebSocket connection: ${error.message}`);
-              ws.close(WS_CLOSE_CODES.INTERNAL_ERROR, 'Internal server error');
-            }
-          });
-        } catch (error) {
-          // Handle different authentication errors with appropriate status codes
-          let statusCode = '401 Unauthorized';
-          let closeCode = WS_CLOSE_CODES.AUTHENTICATION_FAILED;
-          
-          if (error.name === 'TokenExpiredError') {
-            statusCode = '401 Token Expired';
-          } else if (error.name === 'JsonWebTokenError') {
-            statusCode = '401 Invalid Token';
+          if (!ws.isAlive) {
+            clearInterval(pingInterval);
+            ws.terminate();
+            return;
           }
           
-          logger.warn(`WebSocket authentication failed: ${error.message}`, {
-            ip: request.headers['x-forwarded-for'] || request.socket.remoteAddress,
-            error: error.name
-          });
+          ws.isAlive = false;
+          ws.ping();
+        }, heartbeatIntervalMs);
+        
+        // Handle WebSocket connection events
+        ws.on('message', async (data) => {
+          ws.lastActivityAt = new Date();
+          ws.isAlive = true;
           
-          socket.write(`HTTP/1.1 ${statusCode}\r\n\r\n`);
-          socket.destroy();
-        }
-      } else {
-        // Reject connections to other paths
-        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
-        socket.destroy();
-      }
+          // Check rate limit
+          if (checkRateLimit(connectionId)) {
+            sendErrorMessage(ws, 'Rate limit exceeded', WS_CLOSE_CODES.RATE_LIMITED);
+            return;
+          }
+          
+          // Track message for rate limiting
+          trackMessage(connectionId);
+          
+          try {
+            // Validate message format
+            let message;
+            try {
+              message = JSON.parse(data.toString());
+            } catch (error) {
+              sendErrorMessage(ws, 'Invalid message format', WS_CLOSE_CODES.INVALID_DATA);
+              return;
+            }
+            
+            if (!message.type) {
+              sendErrorMessage(ws, 'Message type is required', WS_CLOSE_CODES.INVALID_DATA);
+              return;
+            }
+            
+            // Handle message based on type
+            switch (message.type) {
+              case 'ping':
+                // Client ping (different from WebSocket protocol ping)
+                ws.send(JSON.stringify({
+                  type: 'pong',
+                  timestamp: new Date().toISOString()
+                }));
+                break;
+                
+              case 'subscribe':
+                // Handle channel subscription
+                if (!message.channel) {
+                  sendErrorMessage(ws, 'Channel name is required', WS_CLOSE_CODES.INVALID_DATA);
+                  return;
+                }
+                
+                // Check if user has access to this channel
+                const canAccess = await authorizeChannelAccess(user.sub, message.channel);
+                if (!canAccess) {
+                  sendErrorMessage(
+                    ws, 
+                    `Not authorized to subscribe to channel: ${message.channel}`, 
+                    WS_CLOSE_CODES.AUTHORIZATION_FAILED
+                  );
+                  return;
+                }
+                
+                // Subscribe to channel
+                if (!channelSubscriptions.has(connectionId)) {
+                  channelSubscriptions.set(connectionId, new Set());
+                }
+                
+                channelSubscriptions.get(connectionId).add(message.channel);
+                
+                // Send confirmation
+                ws.send(JSON.stringify({
+                  type: 'subscribed',
+                  channel: message.channel,
+                  timestamp: new Date().toISOString()
+                }));
+                
+                // Log subscription
+                logger.debug(`Client ${connectionId} subscribed to channel ${message.channel}`);
+                break;
+                
+              case 'unsubscribe':
+                // Handle channel unsubscription
+                if (!message.channel) {
+                  sendErrorMessage(ws, 'Channel name is required', WS_CLOSE_CODES.INVALID_DATA);
+                  return;
+                }
+                
+                // Unsubscribe from channel
+                if (channelSubscriptions.has(connectionId)) {
+                  channelSubscriptions.get(connectionId).delete(message.channel);
+                }
+                
+                // Send confirmation
+                ws.send(JSON.stringify({
+                  type: 'unsubscribed',
+                  channel: message.channel,
+                  timestamp: new Date().toISOString()
+                }));
+                
+                // Log unsubscription
+                logger.debug(`Client ${connectionId} unsubscribed from channel ${message.channel}`);
+                break;
+                
+              default:
+                // Log unknown message type
+                logger.warn(`Unknown message type: ${message.type}`);
+            }
+          } catch (error) {
+            logger.error(`Error handling WebSocket message: ${error.message}`, { error });
+            sendErrorMessage(ws, 'Error processing message', WS_CLOSE_CODES.INTERNAL_ERROR);
+          }
+        });
+        
+        // Handle pong messages (response to ping)
+        ws.on('pong', () => {
+          ws.isAlive = true;
+          ws.lastActivityAt = new Date();
+        });
+        
+        // Handle connection close
+        ws.on('close', async (code, reason) => {
+          clearInterval(pingInterval);
+          
+          // Remove from channel subscriptions
+          channelSubscriptions.delete(connectionId);
+          
+          // Remove from message counters
+          if (messageCounters.has(connectionId)) {
+            messageCounters.delete(connectionId);
+          }
+          
+          // Track connection close in database
+          try {
+            await connectionService.updateConnection(connectionId, {
+              status: 'disconnected',
+              disconnectedAt: new Date(),
+              disconnectReason: reason,
+              disconnectCode: code
+            });
+          } catch (error) {
+            logger.error(`Failed to update connection status: ${error.message}`, { connectionId });
+          }
+          
+          logger.info(`WebSocket connection closed: ${connectionId}`, { 
+            userId: user.sub, 
+            code, 
+            reason 
+          });
+        });
+        
+        // Handle errors
+        ws.on('error', (error) => {
+          logger.error(`WebSocket error: ${error.message}`, { 
+            connectionId, 
+            userId: user.sub 
+          });
+        });
+        
+        // Track connection in database
+        connectionService.createConnection({
+          connectionId,
+          userId: user.sub,
+          status: 'active',
+          metadata: JSON.stringify(metadata),
+          userAgent: request.headers['user-agent'],
+          ipAddress: ip
+        }).catch(error => {
+          logger.error(`Failed to track connection: ${error.message}`, { connectionId });
+        });
+        
+        // Emit connection event
+        wss.emit('connection', ws, request);
+        
+        logger.info(`WebSocket connection established: ${connectionId}`, { 
+          userId: user.sub 
+        });
+      });
     } catch (error) {
-      logger.error(`WebSocket upgrade error: ${error.message}`);
-      socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+      logger.error(`WebSocket connection rejected: ${error.message}`, { ip });
+      
+      // Send HTTP error response
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
     }
   });
   
+  /**
+   * Get server statistics
+   * @returns {Object} Server statistics
+   */
+  wss.getStats = () => {
+    const stats = {
+      connections: {
+        total: wss.clients.size,
+        byRole: {}
+      },
+      channels: {
+        total: new Set([...channelSubscriptions.values()].flat()).size,
+        byName: {}
+      },
+      memory: process.memoryUsage()
+    };
+    
+    // Count connections by role
+    wss.clients.forEach(client => {
+      const role = client.userRole || 'anonymous';
+      stats.connections.byRole[role] = (stats.connections.byRole[role] || 0) + 1;
+    });
+    
+    // Count subscribers by channel
+    channelSubscriptions.forEach(channels => {
+      channels.forEach(channel => {
+        if (!stats.channels.byName[channel]) {
+          stats.channels.byName[channel] = 0;
+        }
+        stats.channels.byName[channel]++;
+      });
+    });
+    
+    return stats;
+  };
+  
+  /**
+   * Disconnect a specific client
+   * @param {String} connectionId - Connection ID to disconnect
+   * @param {String} reason - Reason for disconnection
+   * @returns {Boolean} Whether client was disconnected
+   */
+  wss.disconnectClient = (connectionId, reason = 'Disconnected by server') => {
+    let disconnected = false;
+    
+    wss.clients.forEach(client => {
+      if (client.connectionId === connectionId) {
+        client.close(1000, reason);
+        disconnected = true;
+      }
+    });
+    
+    return disconnected;
+  };
+  
+  // Log server start
+  logger.info('WebSocket server created with security features enabled');
+  
   return wss;
 };
 
-module.exports = { 
-  setupWebSocketServer,
-  WS_CLOSE_CODES
+/**
+ * Export WebSocket server setup function
+ */
+module.exports = {
+  setupWebSocketServer
 }; 

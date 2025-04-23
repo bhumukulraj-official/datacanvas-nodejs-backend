@@ -8,14 +8,21 @@ const express = require('express');
 const router = express.Router();
 
 // Import route modules
-const authRoutes = require('../../../modules/auth/routes/auth.routes');
-const profileRoutes = require('../../../modules/profile/routes');
-const projectRoutes = require('../../../modules/projects/routes');
-const blogRoutes = require('../../../modules/blog/routes');
-const contactRoutes = require('../../../modules/contact/routes');
-const mediaRoutes = require('../../../modules/media/routes');
-const notificationRoutes = require('../../../modules/notifications/routes');
-const adminRoutes = require('./admin');
+const { authRoutes } = require('../../../modules/auth');
+const { profileRoutes } = require('../../../modules/profile');
+const { projectRoutes } = require('../../../modules/projects');
+const { blogRoutes } = require('../../../modules/blog');
+const { contactRoutes } = require('../../../modules/contact');
+const { mediaRoutes, optimizationRoutes } = require('../../../modules/media');
+const { notificationRoutes } = require('../../../modules/notifications');
+const { skillRoutes } = require('../../../modules/skills');
+const { experienceRoutes } = require('../../../modules/experience');
+const { educationRoutes } = require('../../../modules/education');
+const { adminRoutes } = require('./admin');
+const { testimonialRoutes } = require('../../../modules/testimonials');
+const { settingsRoutes } = require('../../../modules/settings');
+const { searchRoutes } = require('../../../modules/search');
+const { apiKeyRoutes } = require('../../../modules/security');
 // Import other route modules as needed
 
 // API version information
@@ -43,6 +50,7 @@ router.use((req, res, next) => {
     return originalJson.call(this, obj);
   };
   
+  res.setHeader('X-API-Version', API_VERSION);
   next();
 });
 
@@ -53,8 +61,16 @@ router.use('/projects', projectRoutes);
 router.use('/blog', blogRoutes);
 router.use('/contact', contactRoutes);
 router.use('/media', mediaRoutes);
+router.use('/media/optimize', optimizationRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/skills', skillRoutes);
+router.use('/experience', experienceRoutes);
+router.use('/education', educationRoutes);
 router.use('/admin', adminRoutes);
+router.use('/testimonials', testimonialRoutes);
+router.use('/settings', settingsRoutes);
+router.use('/search', searchRoutes);
+router.use('/api-keys', apiKeyRoutes);
 // Register other routes as needed
 
 // API version info endpoint
@@ -72,9 +88,17 @@ router.get('/version', (req, res) => {
         { path: '/projects', description: 'Project management' },
         { path: '/blog', description: 'Blog post management' },
         { path: '/contact', description: 'Contact form submission' },
-        { path: '/media', description: 'Media management' },
+        { path: '/media', description: 'Media management and optimization' },
         { path: '/notifications', description: 'Notification management' },
-        { path: '/admin', description: 'Admin operations' }
+        { path: '/skills', description: 'Skills management' },
+        { path: '/experience', description: 'Work experience management' },
+        { path: '/education', description: 'Education history management' },
+        { path: '/admin', description: 'Admin operations' },
+        { path: '/admin/users', description: 'User management (admin only)' },
+        { path: '/testimonials', description: 'Testimonial management' },
+        { path: '/settings', description: 'Site settings configuration' },
+        { path: '/search', description: 'Global search functionality' },
+        { path: '/api-keys', description: 'API key management' }
       ]
     }
   });

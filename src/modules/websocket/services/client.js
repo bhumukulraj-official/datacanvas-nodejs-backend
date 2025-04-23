@@ -1,333 +1,409 @@
 /**
- * WebSocket client utility
- * Provides frontend client integration for WebSocket connections
+ * WebSocket client service
+ * Manages individual client connections and state
+ * 
+ * Features:
+ * - Client authentication and authorization
+ * - Connection tracking
+ * - Channel subscription management
+ * - Secure message handling
  */
+const WebSocket = require('ws');
+const { v4: uuidv4 } = require('uuid');
+const { WebSocketError } = require('../../../shared/errors');
+const logger = require('../../../shared/utils/logger');
+const connectionService = require('./connection.service');
 
 /**
- * WebSocket client with automatic reconnection
+ * WebSocket close codes (RFC 6455)
+ */
+const WS_CLOSE_CODES = {
+  NORMAL: 1000,
+  GOING_AWAY: 1001,
+  PROTOCOL_ERROR: 1002,
+  UNSUPPORTED_DATA: 1003,
+  INVALID_DATA: 1007,
+  POLICY_VIOLATION: 1008,
+  MESSAGE_TOO_BIG: 1009,
+  INTERNAL_ERROR: 1011,
+  
+  // Custom codes
+  AUTHENTICATION_FAILED: 4001,
+  AUTHORIZATION_FAILED: 4003,
+  RATE_LIMITED: 4029,
+  INVALID_MESSAGE: 4400
+};
+
+/**
+ * Client class to handle a single WebSocket connection
  */
 class WebSocketClient {
   /**
-   * Create a new WebSocket client
-   * @param {Object} options - Configuration options
-   * @param {String} options.baseUrl - Base URL for WebSocket connection
-   * @param {String} options.token - Authentication token
-   * @param {Number} options.reconnectInterval - Reconnection interval in ms (default: 2000)
-   * @param {Number} options.maxReconnectAttempts - Max reconnection attempts (default: 10)
-   * @param {Function} options.onOpen - Open event handler
-   * @param {Function} options.onMessage - Message event handler
-   * @param {Function} options.onClose - Close event handler
-   * @param {Function} options.onError - Error event handler
-   * @param {Function} options.onReconnect - Reconnect event handler
+   * Create a new client instance
+   * @param {WebSocket} ws - WebSocket connection
+   * @param {Object} user - Authenticated user info
+   * @param {String} connectionId - Unique connection ID
+   * @param {Object} options - Client options
    */
-  constructor(options = {}) {
-    this.baseUrl = options.baseUrl || window.location.origin.replace(/^http/, 'ws');
-    this.token = options.token;
-    this.reconnectInterval = options.reconnectInterval || 2000;
-    this.maxReconnectAttempts = options.maxReconnectAttempts || 10;
+  constructor(ws, user, connectionId, options = {}) {
+    this.ws = ws;
+    this.user = user;
+    this.connectionId = connectionId || uuidv4();
+    this.userId = user ? user.id : null;
+    this.channels = new Set();
+    this.isAlive = true;
+    this.createdAt = new Date();
+    this.lastActivityAt = new Date();
+    this.closedAt = null;
+    this.closeCode = null;
+    this.closeReason = null;
+    this.metadata = options.metadata || {};
+    this.ip = options.ip || null;
+    this.userAgent = options.userAgent || null;
     
-    // Event handlers
-    this.onOpen = options.onOpen || (() => {});
-    this.onMessage = options.onMessage || (() => {});
-    this.onClose = options.onClose || (() => {});
-    this.onError = options.onError || (() => {});
-    this.onReconnect = options.onReconnect || (() => {});
+    // Set up event handlers
+    this._setupEventHandlers();
     
-    // Internal state
-    this.socket = null;
-    this.reconnectAttempts = 0;
-    this.reconnectTimer = null;
-    this.isConnecting = false;
-    this.isConnected = false;
-    this.isForceClosed = false;
-    this.messageQueue = [];
-    
-    // Message ID counter
-    this.messageIdCounter = 1;
-    
-    // Event listeners map for custom events
-    this.eventListeners = new Map();
+    // Track connection in database
+    this._trackConnection();
   }
   
   /**
-   * Connect to WebSocket server
-   * @returns {Promise} Resolves when connection is established
-   */
-  connect() {
-    if (this.isConnecting) {
-      return Promise.reject(new Error('WebSocket connection already in progress'));
-    }
-    
-    if (this.isConnected) {
-      return Promise.resolve();
-    }
-    
-    this.isConnecting = true;
-    this.isForceClosed = false;
-    
-    return new Promise((resolve, reject) => {
-      try {
-        // Create WebSocket URL with token
-        const url = `${this.baseUrl}/api/v1/ws?token=${this.token}`;
-        
-        // Create WebSocket connection
-        this.socket = new WebSocket(url);
-        
-        // Set up connection timeout
-        const connectionTimeout = setTimeout(() => {
-          if (!this.isConnected) {
-            this.socket.close();
-            this.isConnecting = false;
-            reject(new Error('WebSocket connection timeout'));
-          }
-        }, 10000); // 10 seconds timeout
-        
-        // Connection established
-        this.socket.onopen = (event) => {
-          clearTimeout(connectionTimeout);
-          this.isConnected = true;
-          this.isConnecting = false;
-          this.reconnectAttempts = 0;
-          
-          // Process message queue
-          this._processQueue();
-          
-          // Call onOpen handler
-          this.onOpen(event);
-          
-          resolve();
-        };
-        
-        // Message received
-        this.socket.onmessage = (event) => {
-          this._handleMessage(event);
-        };
-        
-        // Connection closed
-        this.socket.onclose = (event) => {
-          clearTimeout(connectionTimeout);
-          this.isConnected = false;
-          this.isConnecting = false;
-          
-          // Call onClose handler
-          this.onClose(event);
-          
-          // Attempt to reconnect unless connection was forcibly closed
-          if (!this.isForceClosed) {
-            this._reconnect();
-          }
-        };
-        
-        // Error occurred
-        this.socket.onerror = (event) => {
-          this.isConnecting = false;
-          
-          // Call onError handler
-          this.onError(event);
-          
-          if (!this.isConnected) {
-            clearTimeout(connectionTimeout);
-            reject(new Error('WebSocket connection error'));
-          }
-        };
-      } catch (error) {
-        this.isConnecting = false;
-        reject(error);
-      }
-    });
-  }
-  
-  /**
-   * Disconnect from WebSocket server
-   */
-  disconnect() {
-    if (!this.socket) {
-      return;
-    }
-    
-    // Mark as force closed to prevent reconnection
-    this.isForceClosed = true;
-    
-    // Clear reconnect timer
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    
-    // Close socket
-    if (this.socket.readyState === WebSocket.OPEN) {
-      this.socket.close(1000, 'Client disconnected');
-    }
-    
-    this.isConnected = false;
-  }
-  
-  /**
-   * Send message to WebSocket server
-   * @param {String} type - Message type
-   * @param {Object} payload - Message payload
-   * @returns {Promise} Resolves when message is sent
-   */
-  send(type, payload = {}) {
-    const messageId = this._generateMessageId();
-    
-    const message = {
-      type,
-      messageId,
-      payload,
-      timestamp: new Date().toISOString()
-    };
-    
-    // If not connected, queue message
-    if (!this.isConnected) {
-      this.messageQueue.push(message);
-      
-      // Try to connect if not connecting
-      if (!this.isConnecting && !this.isForceClosed) {
-        this.connect();
-      }
-      
-      return Promise.resolve(messageId);
-    }
-    
-    // Send message
-    try {
-      this.socket.send(JSON.stringify(message));
-      return Promise.resolve(messageId);
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }
-  
-  /**
-   * Add event listener
-   * @param {String} eventType - Event type to listen for
-   * @param {Function} callback - Callback function
-   */
-  addEventListener(eventType, callback) {
-    if (!this.eventListeners.has(eventType)) {
-      this.eventListeners.set(eventType, []);
-    }
-    
-    this.eventListeners.get(eventType).push(callback);
-  }
-  
-  /**
-   * Remove event listener
-   * @param {String} eventType - Event type
-   * @param {Function} callback - Callback function to remove
-   */
-  removeEventListener(eventType, callback) {
-    if (!this.eventListeners.has(eventType)) {
-      return;
-    }
-    
-    const listeners = this.eventListeners.get(eventType).filter(
-      listener => listener !== callback
-    );
-    
-    if (listeners.length) {
-      this.eventListeners.set(eventType, listeners);
-    } else {
-      this.eventListeners.delete(eventType);
-    }
-  }
-  
-  /**
-   * Process message queue
+   * Set up WebSocket event handlers
    * @private
    */
-  _processQueue() {
-    if (!this.isConnected || !this.messageQueue.length) {
-      return;
-    }
-    
-    // Process all queued messages
-    while (this.messageQueue.length > 0) {
-      const message = this.messageQueue.shift();
-      try {
-        this.socket.send(JSON.stringify(message));
-      } catch (error) {
-        console.error('Failed to send queued message', error);
-      }
+  _setupEventHandlers() {
+    this.ws.on('message', (data) => this._handleMessage(data));
+    this.ws.on('close', (code, reason) => this._handleClose(code, reason));
+    this.ws.on('error', (error) => this._handleError(error));
+    this.ws.on('pong', () => this._handlePong());
+  }
+  
+  /**
+   * Track connection in database
+   * @private
+   */
+  async _trackConnection() {
+    try {
+      await connectionService.createConnection({
+        connectionId: this.connectionId,
+        userId: this.userId,
+        status: 'active',
+        metadata: this.metadata,
+        userAgent: this.userAgent,
+        ipAddress: this.ip
+      });
+      
+      logger.info(`WebSocket connection created: ${this.connectionId}`, {
+        userId: this.userId,
+        connectionId: this.connectionId
+      });
+    } catch (error) {
+      logger.error(`Failed to track WebSocket connection: ${error.message}`, {
+        userId: this.userId,
+        connectionId: this.connectionId
+      });
     }
   }
   
   /**
    * Handle incoming message
-   * @param {Event} event - WebSocket message event
+   * @param {Buffer|String} data - Message data
    * @private
    */
-  _handleMessage(event) {
+  async _handleMessage(data) {
     try {
-      const message = JSON.parse(event.data);
+      this.lastActivityAt = new Date();
       
-      // Call onMessage handler
-      this.onMessage(message);
+      let message;
+      try {
+        message = JSON.parse(data.toString());
+      } catch (error) {
+        return this.sendError('Invalid JSON format', WS_CLOSE_CODES.INVALID_DATA);
+      }
       
-      // Call specific event handler if exists
-      if (message.type && this.eventListeners.has(message.type)) {
-        this.eventListeners.get(message.type).forEach(callback => {
-          try {
-            callback(message.payload, message);
-          } catch (error) {
-            console.error(`Error in event listener for ${message.type}`, error);
-          }
-        });
+      if (!message.type) {
+        return this.sendError('Message type is required', WS_CLOSE_CODES.INVALID_DATA);
+      }
+      
+      // Process different message types
+      switch (message.type) {
+        case 'ping':
+          this.send({ type: 'pong', timestamp: new Date().toISOString() });
+          break;
+          
+        case 'subscribe':
+          await this._handleSubscribe(message);
+          break;
+          
+        case 'unsubscribe':
+          await this._handleUnsubscribe(message);
+          break;
+          
+        default:
+          // Unknown message type
+          logger.warn(`Unknown message type: ${message.type}`, {
+            connectionId: this.connectionId,
+            userId: this.userId
+          });
       }
     } catch (error) {
-      console.error('Error parsing WebSocket message', error);
+      logger.error(`Error handling WebSocket message: ${error.message}`, {
+        connectionId: this.connectionId,
+        userId: this.userId,
+        error
+      });
+      
+      this.sendError(`Error processing message: ${error.message}`);
     }
   }
   
   /**
-   * Attempt to reconnect
+   * Handle channel subscription
+   * @param {Object} message - Subscription message
    * @private
    */
-  _reconnect() {
-    if (this.isForceClosed || this.isConnecting || this.isConnected) {
-      return;
+  async _handleSubscribe(message) {
+    try {
+      if (!message.channel) {
+        return this.sendError('Channel name is required for subscription');
+      }
+      
+      // Check if user has access to this channel
+      const canAccess = await this._authorizeChannelAccess(message.channel);
+      if (!canAccess) {
+        return this.sendError(`Not authorized to subscribe to channel: ${message.channel}`, 
+          WS_CLOSE_CODES.AUTHORIZATION_FAILED);
+      }
+      
+      // Add to client channels
+      this.channels.add(message.channel);
+      
+      // Track in database
+      await connectionService.subscribeToChannel(this.connectionId, message.channel);
+      
+      // Confirm subscription
+      this.send({
+        type: 'subscribed',
+        channel: message.channel,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.debug(`Client subscribed to channel: ${message.channel}`, {
+        connectionId: this.connectionId,
+        userId: this.userId,
+        channel: message.channel
+      });
+    } catch (error) {
+      logger.error(`Failed to subscribe to channel: ${error.message}`, {
+        connectionId: this.connectionId,
+        userId: this.userId,
+        channel: message.channel
+      });
+      
+      this.sendError(`Failed to subscribe: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Handle channel unsubscription
+   * @param {Object} message - Unsubscription message
+   * @private
+   */
+  async _handleUnsubscribe(message) {
+    try {
+      if (!message.channel) {
+        return this.sendError('Channel name is required for unsubscription');
+      }
+      
+      // Remove from client channels
+      this.channels.delete(message.channel);
+      
+      // Track in database
+      await connectionService.unsubscribeFromChannel(this.connectionId, message.channel);
+      
+      // Confirm unsubscription
+      this.send({
+        type: 'unsubscribed',
+        channel: message.channel,
+        timestamp: new Date().toISOString()
+      });
+      
+      logger.debug(`Client unsubscribed from channel: ${message.channel}`, {
+        connectionId: this.connectionId,
+        userId: this.userId,
+        channel: message.channel
+      });
+    } catch (error) {
+      logger.error(`Failed to unsubscribe from channel: ${error.message}`, {
+        connectionId: this.connectionId,
+        userId: this.userId,
+        channel: message.channel
+      });
+      
+      this.sendError(`Failed to unsubscribe: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Authorize channel access
+   * @param {String} channel - Channel name
+   * @returns {Promise<Boolean>} Whether user has access
+   * @private
+   */
+  async _authorizeChannelAccess(channel) {
+    // Public channels are accessible by anyone
+    if (channel.startsWith('public:')) {
+      return true;
     }
     
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error(`Maximum reconnection attempts (${this.maxReconnectAttempts}) reached`);
-      return;
+    // User-specific channels
+    if (channel.startsWith('user:')) {
+      const channelUserId = channel.split(':')[1];
+      return this.userId && this.userId.toString() === channelUserId;
     }
     
-    this.reconnectAttempts++;
+    // Admin channels
+    if (channel.startsWith('admin:')) {
+      return this.user && this.user.role === 'admin';
+    }
     
-    // Calculate backoff delay with exponential backoff (min 2s, max 30s)
-    const delay = Math.min(
-      30000,
-      this.reconnectInterval * Math.pow(1.5, this.reconnectAttempts - 1)
-    );
-    
-    // Call onReconnect handler
-    this.onReconnect({
-      attempt: this.reconnectAttempts,
-      maxAttempts: this.maxReconnectAttempts,
-      delay
+    // Default deny for unrecognized channel patterns
+    return false;
+  }
+  
+  /**
+   * Handle WebSocket close event
+   * @param {Number} code - Close code
+   * @param {String} reason - Close reason
+   * @private
+   */
+  async _handleClose(code, reason) {
+    try {
+      this.isAlive = false;
+      this.closedAt = new Date();
+      this.closeCode = code;
+      this.closeReason = reason;
+      
+      // Update connection status in database
+      await connectionService.updateConnection(this.connectionId, {
+        status: 'disconnected',
+        disconnectedAt: this.closedAt,
+        disconnectReason: reason,
+        disconnectCode: code
+      });
+      
+      logger.info(`WebSocket connection closed: ${this.connectionId}`, {
+        userId: this.userId,
+        connectionId: this.connectionId,
+        code,
+        reason
+      });
+    } catch (error) {
+      logger.error(`Error handling WebSocket close: ${error.message}`, {
+        connectionId: this.connectionId,
+        userId: this.userId,
+        error
+      });
+    }
+  }
+  
+  /**
+   * Handle WebSocket error event
+   * @param {Error} error - Error object
+   * @private
+   */
+  _handleError(error) {
+    logger.error(`WebSocket error: ${error.message}`, {
+      connectionId: this.connectionId,
+      userId: this.userId,
+      error
     });
     
-    // Set reconnect timer
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect().catch(() => {
-        // If connection fails, _reconnect will be called by onclose handler
-      });
-    }, delay);
+    this.sendError(`WebSocket error: ${error.message}`, WS_CLOSE_CODES.INTERNAL_ERROR);
   }
   
   /**
-   * Generate unique message ID
-   * @returns {String} Unique message ID
+   * Handle pong response (used for heartbeat)
    * @private
    */
-  _generateMessageId() {
-    const timestamp = Date.now();
-    const counter = this.messageIdCounter++;
-    
-    return `${timestamp}-${counter}`;
+  _handlePong() {
+    this.isAlive = true;
+    this.lastActivityAt = new Date();
+  }
+  
+  /**
+   * Send ping message for heartbeat
+   */
+  sendPing() {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.ping();
+    }
+  }
+  
+  /**
+   * Send message to client
+   * @param {Object} message - Message to send
+   * @returns {Promise<Boolean>} Success status
+   */
+  send(message) {
+    return new Promise((resolve) => {
+      if (this.ws.readyState !== WebSocket.OPEN) {
+        return resolve(false);
+      }
+      
+      const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
+      
+      this.ws.send(messageStr, (error) => {
+        if (error) {
+          logger.error(`Failed to send message: ${error.message}`, {
+            connectionId: this.connectionId,
+            userId: this.userId
+          });
+          resolve(false);
+        } else {
+          this.lastActivityAt = new Date();
+          resolve(true);
+        }
+      });
+    });
+  }
+  
+  /**
+   * Send error message to client
+   * @param {String} message - Error message
+   * @param {Number} code - Error code
+   * @returns {Promise<Boolean>} Success status
+   */
+  sendError(message, code) {
+    return this.send({
+      type: 'error',
+      error: {
+        message,
+        code
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  /**
+   * Check if client is subscribed to channel
+   * @param {String} channel - Channel name
+   * @returns {Boolean} Whether client is subscribed
+   */
+  isSubscribedTo(channel) {
+    return this.channels.has(channel);
+  }
+  
+  /**
+   * Close the WebSocket connection
+   * @param {Number} code - Close code
+   * @param {String} reason - Close reason
+   */
+  close(code = WS_CLOSE_CODES.NORMAL, reason = 'Connection closed') {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close(code, reason);
+    }
   }
 }
 

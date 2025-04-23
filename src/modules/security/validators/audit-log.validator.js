@@ -1,9 +1,125 @@
-const { body, param, query } = require('express-validator');
+const { body, param, query, validationResult } = require('express-validator');
+const { AppError } = require('../../../shared/errors');
+const { validationHandler } = require('../../../middleware/validationHandler');
 
 /**
- * Validation for listing audit logs
+ * Audit Log Validators
  */
-exports.listAuditLogs = [
+
+// Common validation handler
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const validationErrors = errors.array().map(error => ({
+      field: error.param,
+      message: error.msg
+    }));
+    return next(new AppError('Validation error', 400, 'VAL_001', validationErrors));
+  }
+  next();
+};
+
+/**
+ * Validate get audit logs request
+ */
+const validateQueryAuditLogs = [
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  
+  query('userId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid user ID format'),
+  
+  query('action')
+    .optional()
+    .isString()
+    .withMessage('Action must be a string'),
+  
+  query('resource')
+    .optional()
+    .isString()
+    .withMessage('Resource must be a string'),
+  
+  query('startDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Start date must be a valid ISO 8601 date'),
+  
+  query('endDate')
+    .optional()
+    .isISO8601()
+    .withMessage('End date must be a valid ISO 8601 date'),
+  
+  query('sortBy')
+    .optional()
+    .isIn(['created_at', 'action', 'entity_type', 'entity_id', 'user_id'])
+    .withMessage('Sort by must be one of: created_at, action, entity_type, entity_id, user_id'),
+  
+  query('sortOrder')
+    .optional()
+    .isIn(['ASC', 'DESC'])
+    .withMessage('Sort order must be either ASC or DESC'),
+  
+  validationHandler
+];
+
+/**
+ * Validate audit log ID parameter
+ */
+const validateAuditLogId = [
+  param('id')
+    .isMongoId()
+    .withMessage('Invalid audit log ID format'),
+  
+  validationHandler
+];
+
+/**
+ * Validate entity audit history request
+ */
+exports.validateEntityAuditHistory = [
+  param('type')
+    .isString()
+    .withMessage('Entity type must be a string'),
+  
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Entity ID must be a positive integer'),
+  
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  
+  query('sortOrder')
+    .optional()
+    .isIn(['ASC', 'DESC'])
+    .withMessage('Sort order must be either ASC or DESC'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate user activity logs request
+ */
+exports.validateUserActivityLogs = [
+  param('userId')
+    .isInt({ min: 1 })
+    .withMessage('User ID must be a positive integer'),
+  
   query('page')
     .optional()
     .isInt({ min: 1 })
@@ -19,40 +135,22 @@ exports.listAuditLogs = [
     .isString()
     .withMessage('Action must be a string'),
   
-  query('entity_type')
-    .optional()
-    .isString()
-    .withMessage('Entity type must be a string'),
-  
-  query('entity_id')
-    .optional()
-    .isInt()
-    .withMessage('Entity ID must be an integer'),
-  
-  query('user_id')
-    .optional()
-    .isInt()
-    .withMessage('User ID must be an integer'),
-  
-  query('start_date')
+  query('startDate')
     .optional()
     .isISO8601()
-    .withMessage('Start date must be a valid date'),
+    .withMessage('Start date must be a valid ISO 8601 date'),
   
-  query('end_date')
+  query('endDate')
     .optional()
     .isISO8601()
-    .withMessage('End date must be a valid date')
-    .custom((value, { req }) => {
-      if (req.query.start_date && value) {
-        const startDate = new Date(req.query.start_date);
-        const endDate = new Date(value);
-        if (endDate < startDate) {
-          throw new Error('End date must be after start date');
-        }
-      }
-      return true;
-    })
+    .withMessage('End date must be a valid ISO 8601 date'),
+  
+  query('sortOrder')
+    .optional()
+    .isIn(['ASC', 'DESC'])
+    .withMessage('Sort order must be either ASC or DESC'),
+  
+  handleValidationErrors
 ];
 
 /**
@@ -113,4 +211,9 @@ exports.getSecuritySummary = [
       }
       return true;
     })
-]; 
+];
+
+module.exports = {
+  validateQueryAuditLogs,
+  validateAuditLogId
+}; 
