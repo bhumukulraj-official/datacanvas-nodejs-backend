@@ -5,8 +5,16 @@ const mediaValidator = require('./validators/media.validator');
 const uploadMiddleware = require('./middleware/upload.middleware');
 const { requireAuth } = require('../../shared/middleware/auth.middleware');
 
-// All media routes require authentication
-router.use(requireAuth);
+// Routes that require authentication
+router.use('/upload', requireAuth);
+router.use('/batch', requireAuth);
+router.use('/:id/optimize', requireAuth);
+router.use('/:id/associate', requireAuth);
+router.use('/:id/temp-url', requireAuth);
+router.use('/search', requireAuth);
+
+// Public route for accessing media with temporary URLs
+router.get('/access/:id', mediaValidator.validateMediaAccess, mediaController.accessMedia);
 
 /**
  * @api {post} /api/v1/media/upload Upload media
@@ -27,8 +35,31 @@ router.post(
  */
 router.get(
   '/',
+  requireAuth,
   mediaValidator.validateListMedia,
   mediaController.listMedia
+);
+
+/**
+ * @api {get} /api/v1/media/search Advanced media search
+ * @apiDescription Advanced search for media with multiple filters
+ * @apiVersion 1.0.0
+ */
+router.get(
+  '/search',
+  mediaValidator.validateAdvancedSearch,
+  mediaController.advancedSearch
+);
+
+/**
+ * @api {post} /api/v1/media/batch Batch media operations
+ * @apiDescription Perform batch operations on multiple media items
+ * @apiVersion 1.0.0
+ */
+router.post(
+  '/batch',
+  mediaValidator.validateBatchOperations,
+  mediaController.batchMediaOperations
 );
 
 /**
@@ -38,6 +69,7 @@ router.get(
  */
 router.get(
   '/:id',
+  requireAuth,
   mediaValidator.validateMediaId,
   mediaController.getMediaDetails
 );
@@ -49,6 +81,7 @@ router.get(
  */
 router.delete(
   '/:id',
+  requireAuth,
   mediaValidator.validateMediaId,
   mediaController.deleteMedia
 );
@@ -62,6 +95,40 @@ router.post(
   '/:id/optimize',
   mediaValidator.validateMediaOptimization,
   mediaController.optimizeMedia
+);
+
+/**
+ * @api {get} /api/v1/media/:id/optimization Get optimization status
+ * @apiDescription Get optimization status of a media file
+ * @apiVersion 1.0.0
+ */
+router.get(
+  '/:id/optimization',
+  requireAuth,
+  mediaValidator.validateMediaId,
+  mediaController.getOptimizationStatus
+);
+
+/**
+ * @api {post} /api/v1/media/:id/associate Associate media with entity
+ * @apiDescription Associate media with another entity (project, blog, etc.)
+ * @apiVersion 1.0.0
+ */
+router.post(
+  '/:id/associate',
+  mediaValidator.validateMediaAssociation,
+  mediaController.associateMedia
+);
+
+/**
+ * @api {get} /api/v1/media/:id/temp-url Generate temporary URL
+ * @apiDescription Generate a temporary URL for accessing a media file
+ * @apiVersion 1.0.0
+ */
+router.get(
+  '/:id/temp-url',
+  mediaValidator.validateTemporaryUrl,
+  mediaController.generateTemporaryUrl
 );
 
 module.exports = router; 

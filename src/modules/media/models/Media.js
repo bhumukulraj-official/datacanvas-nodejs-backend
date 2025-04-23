@@ -1,6 +1,11 @@
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../../../shared/database');
 
+// Media type and status values matching the database ENUMs
+const MEDIA_TYPES = ['image', 'video', 'document', 'audio'];
+const MEDIA_STATUSES = ['processing', 'ready', 'failed', 'deleted'];
+const VISIBILITY_TYPES = ['public', 'private'];
+
 class Media extends Model {}
 
 Media.init(
@@ -40,11 +45,8 @@ Media.init(
       allowNull: true,
     },
     type: {
-      type: DataTypes.STRING(10), // Using STRING to represent ENUM 'media_type'
+      type: DataTypes.ENUM(...MEDIA_TYPES),
       allowNull: false,
-      validate: {
-        isIn: [['image', 'video', 'document', 'audio']],
-      },
     },
     mime_type: {
       type: DataTypes.STRING(100),
@@ -71,24 +73,18 @@ Media.init(
       allowNull: true,
     },
     visibility: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.ENUM(...VISIBILITY_TYPES),
       defaultValue: 'public',
       allowNull: false,
-      validate: {
-        isIn: [['public', 'private']],
-      },
     },
     metadata: {
       type: DataTypes.JSONB,
       defaultValue: {},
     },
     status: {
-      type: DataTypes.STRING(10), // Using STRING to represent ENUM 'media_status'
+      type: DataTypes.ENUM(...MEDIA_STATUSES),
       defaultValue: 'ready',
       allowNull: false,
-      validate: {
-        isIn: [['processing', 'ready', 'failed', 'deleted']],
-      },
     },
     optimized_url: {
       type: DataTypes.STRING(255),
@@ -172,5 +168,10 @@ Media.init(
     ],
   }
 );
+
+// Export constants for use in validators and services
+Media.MEDIA_TYPES = MEDIA_TYPES;
+Media.MEDIA_STATUSES = MEDIA_STATUSES;
+Media.VISIBILITY_TYPES = VISIBILITY_TYPES;
 
 module.exports = Media; 

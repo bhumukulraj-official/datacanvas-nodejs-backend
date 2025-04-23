@@ -241,9 +241,12 @@ exports.optimizeMedia = async (req, res, next) => {
       optimizedUrl: media.optimized_url,
       originalSize: media.size,
       optimizedSize: media.optimized_size,
-      compressionRatio: media.optimization_metadata.compressionRatio,
+      compressionRatio: media.size && media.optimized_size ? 
+        (1 - (media.optimized_size / media.size)) * 100 : 0,
       quality: media.optimization_metadata.quality,
       format: media.optimization_metadata.format,
+      width: media.optimization_metadata.width,
+      height: media.optimization_metadata.height,
       processedAt: media.optimization_metadata.processedAt,
     };
     
@@ -253,7 +256,333 @@ exports.optimizeMedia = async (req, res, next) => {
       message: 'Media optimized successfully',
     });
   } catch (error) {
-    logger.error('Optimize media error', { error, mediaId: req.params.id });
+    logger.error('Media optimization error', { error, mediaId: req.params.id });
+    next(error);
+  }
+};
+
+/**
+ * @api {get} /api/v1/media/:id/optimization Get optimization status
+ * @apiName GetOptimizationStatus
+ * @apiGroup Media
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiParam {Number} id Media ID
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Optimization details
+ * @apiSuccess {String} message Success message
+ */
+exports.getOptimizationStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // Get user from authentication middleware
+    const userId = req.user.id;
+    
+    const media = await mediaService.getMediaById(id, userId);
+    
+    // Check if media has been optimized
+    const isOptimized = !!media.optimized_url;
+    
+    // Format the response
+    const response = {
+      id: media.id,
+      isOptimized: isOptimized,
+      originalUrl: media.url,
+      optimizedUrl: media.optimized_url,
+      originalSize: media.size,
+      optimizedSize: media.optimized_size,
+      compressionRatio: media.size && media.optimized_size ? 
+        (1 - (media.optimized_size / media.size)) * 100 : 0,
+      optimizationMetadata: media.optimization_metadata
+    };
+    
+    res.status(200).json({
+      success: true,
+      data: response,
+      message: 'Optimization status retrieved successfully',
+    });
+  } catch (error) {
+    logger.error('Get optimization status error', { error, mediaId: req.params.id });
+    next(error);
+  }
+};
+
+/**
+ * @api {post} /api/v1/media/batch Batch media operations
+ * @apiName BatchMediaOperations
+ * @apiGroup Media
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiParam {String} operation Operation type (delete, optimize)
+ * @apiParam {Array} mediaIds Array of media IDs to operate on
+ * @apiParam {Object} [options] Options for the operation
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Operation results
+ * @apiSuccess {String} message Success message
+ */
+exports.batchMediaOperations = async (req, res, next) => {
+  try {
+    const { operation, mediaIds, options } = req.body;
+    
+    if (!Array.isArray(mediaIds) || mediaIds.length === 0) {
+      throw new AppError('Invalid media IDs', 400, 'MEDIA_001');
+    }
+    
+    // Get user from authentication middleware
+    const userId = req.user.id;
+    
+    let results;
+    
+    switch (operation) {
+      case 'delete':
+        results = await mediaService.batchDeleteMedia(mediaIds, userId);
+        break;
+      case 'optimize':
+        results = await mediaService.batchOptimizeMedia(mediaIds, userId, options);
+        break;
+      default:
+        throw new AppError(`Unsupported operation: ${operation}`, 400, 'MEDIA_002');
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        operation,
+        results
+      },
+      message: `Batch ${operation} operation completed successfully`,
+    });
+  } catch (error) {
+    logger.error('Batch media operation error', { error });
+    next(error);
+  }
+};
+
+/**
+ * @api {get} /api/v1/media/search Advanced search
+ * @apiName AdvancedMediaSearch
+ * @apiGroup Media
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiParam {String} [query] Search query for filename and description
+ * @apiParam {String} [type] Filter by media type
+ * @apiParam {String} [startDate] Filter by uploaded date (start)
+ * @apiParam {String} [endDate] Filter by uploaded date (end)
+ * @apiParam {Number} [minSize] Filter by minimum size in bytes
+ * @apiParam {Number} [maxSize] Filter by maximum size in bytes
+ * @apiParam {String} [status] Filter by status
+ * @apiParam {Boolean} [optimized] Filter by whether media is optimized
+ * @apiParam {String} [sortBy] Sort by field (uploadedAt, size, etc.)
+ * @apiParam {String} [sortOrder] Sort order (asc, desc)
+ * @apiParam {Number} [page=1] Page number
+ * @apiParam {Number} [limit=20] Items per page
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Search results and pagination data
+ * @apiSuccess {String} message Success message
+ */
+exports.advancedSearch = async (req, res, next) => {
+  try {
+    const {
+      query, type, startDate, endDate, minSize, maxSize, 
+      status, optimized, sortBy, sortOrder, page, limit
+    } = req.query;
+    
+    // Get user from authentication middleware
+    const userId = req.user.id;
+    
+    const result = await mediaService.advancedSearch({
+      userId,
+      query,
+      type,
+      startDate,
+      endDate,
+      minSize,
+      maxSize,
+      status,
+      optimized: optimized === 'true',
+      sortBy,
+      sortOrder,
+      page,
+      limit
+    });
+    
+    // Format the media items to match API spec
+    const formattedMedia = result.media.map(media => ({
+      id: media.id,
+      url: media.url,
+      type: media.type,
+      size: media.size,
+      filename: media.filename,
+      description: media.description,
+      uploadedAt: media.uploaded_at,
+      thumbnailUrl: media.thumbnail_url,
+      optimizedUrl: media.optimized_url,
+      status: media.status
+    }));
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        media: formattedMedia,
+        pagination: result.pagination,
+      },
+      message: 'Advanced search results retrieved successfully',
+    });
+  } catch (error) {
+    logger.error('Advanced search error', { error });
+    next(error);
+  }
+};
+
+/**
+ * @api {post} /api/v1/media/:id/associate Associate media with entity
+ * @apiName AssociateMedia
+ * @apiGroup Media
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiParam {Number} id Media ID
+ * @apiParam {String} entityType Entity type (project, blog, etc.)
+ * @apiParam {Number} entityId Entity ID
+ * @apiParam {String} [relationshipType] Relationship type (featured, gallery, etc.)
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Association details
+ * @apiSuccess {String} message Success message
+ */
+exports.associateMedia = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { entityType, entityId, relationshipType } = req.body;
+    
+    // Get user from authentication middleware
+    const userId = req.user.id;
+    
+    const media = await mediaService.associateMedia(id, userId, {
+      entityType,
+      entityId,
+      relationshipType: relationshipType || 'default'
+    });
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        id: media.id,
+        url: media.url,
+        type: media.type,
+        associated: {
+          entityType,
+          entityId,
+          relationshipType: relationshipType || 'default'
+        }
+      },
+      message: 'Media associated successfully',
+    });
+  } catch (error) {
+    logger.error('Media association error', { error, mediaId: req.params.id });
+    next(error);
+  }
+};
+
+/**
+ * @api {get} /api/v1/media/:id/temp-url Generate temporary URL
+ * @apiName GenerateTemporaryURL
+ * @apiGroup Media
+ * @apiVersion 1.0.0
+ * 
+ * @apiHeader {String} Authorization User's JWT token
+ * 
+ * @apiParam {Number} id Media ID
+ * @apiParam {Number} [expiresIn=3600] Expiration time in seconds (default: 1 hour)
+ * 
+ * @apiSuccess {Boolean} success Indicates successful operation
+ * @apiSuccess {Object} data Temporary URL details
+ * @apiSuccess {String} message Success message
+ */
+exports.generateTemporaryUrl = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { expiresIn = 3600 } = req.query; // Default: 1 hour
+    
+    // Get user from authentication middleware
+    const userId = req.user.id;
+    
+    const result = await mediaService.generateTemporaryUrl(id, userId, expiresIn);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        id: result.id,
+        temporaryUrl: result.temporaryUrl,
+        expiresAt: result.expiresAt
+      },
+      message: 'Temporary URL generated successfully',
+    });
+  } catch (error) {
+    logger.error('Generate temporary URL error', { error, mediaId: req.params.id });
+    next(error);
+  }
+};
+
+/**
+ * @api {get} /api/v1/media/access/:id Access media with temporary URL
+ * @apiName AccessMedia
+ * @apiGroup Media
+ * @apiVersion 1.0.0
+ * 
+ * @apiParam {Number} id Media ID
+ * @apiParam {String} [token] Access token for private media
+ * 
+ * @apiSuccess {File} Media file content
+ */
+exports.accessMedia = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { token } = req.query;
+    
+    // Find the media
+    const media = await mediaService.getMediaById(id);
+    
+    // Check if media exists
+    if (!media) {
+      throw new AppError('Media not found', 404, 'MEDIA_001');
+    }
+    
+    // Check if media is public or needs token validation
+    if (media.visibility === 'private') {
+      if (!token) {
+        throw new AppError('Authentication required for private media', 401, 'MEDIA_AUTH_001');
+      }
+      
+      // Validate token
+      const isValidToken = await mediaService.validateMediaAccessToken(media, token);
+      if (!isValidToken) {
+        throw new AppError('Invalid or expired token', 403, 'MEDIA_AUTH_002');
+      }
+    }
+    
+    // Get the file from storage
+    const fileStream = await mediaService.getMediaFileStream(media);
+    
+    // Set appropriate content type
+    res.set('Content-Type', media.mime_type);
+    res.set('Content-Disposition', `inline; filename="${media.filename}"`);
+    
+    // Stream the file to the client
+    fileStream.pipe(res);
+  } catch (error) {
+    logger.error('Media access error', { error, mediaId: req.params.id });
     next(error);
   }
 }; 

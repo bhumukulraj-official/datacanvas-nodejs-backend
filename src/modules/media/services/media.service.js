@@ -6,6 +6,8 @@ const { AppError } = require('../../../shared/errors');
 const Media = require('../models/Media');
 const logger = require('../../../shared/utils/logger');
 const { sequelize } = require('../../../shared/database');
+const crypto = require('crypto');
+const { Sequelize } = require('sequelize');
 
 // Define storage base paths
 const UPLOAD_BASE_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
@@ -424,4 +426,423 @@ function validateFileType(mimetype, fileExt, requestedType) {
   }
   
   return requestedType;
-} 
+}
+
+/**
+ * Advanced search for media with multiple filters
+ * @param {Object} params Search parameters
+ * @returns {Promise<Object>} Search results and pagination info
+ */
+exports.advancedSearch = async (params) => {
+  const {
+    userId,
+    query,
+    type,
+    startDate,
+    endDate,
+    minSize,
+    maxSize,
+    status,
+    optimized,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+    page = 1,
+    limit = 20
+  } = params;
+
+  const offset = (page - 1) * limit;
+  const where = { user_id: userId };
+
+  // Apply search filters
+  if (query) {
+    where[Sequelize.Op.or] = [
+      { filename: { [Sequelize.Op.iLike]: `%${query}%` } },
+      { description: { [Sequelize.Op.iLike]: `%${query}%` } }
+    ];
+  }
+
+  if (type) {
+    where.type = type;
+  }
+
+  if (startDate || endDate) {
+    where.uploaded_at = {};
+    if (startDate) {
+      where.uploaded_at[Sequelize.Op.gte] = new Date(startDate);
+    }
+    if (endDate) {
+      where.uploaded_at[Sequelize.Op.lte] = new Date(endDate);
+    }
+  }
+
+  if (minSize) {
+    where.size = where.size || {};
+    where.size[Sequelize.Op.gte] = minSize;
+  }
+
+  if (maxSize) {
+    where.size = where.size || {};
+    where.size[Sequelize.Op.lte] = maxSize;
+  }
+
+  if (status) {
+    where.status = status;
+  }
+
+  if (optimized !== undefined) {
+    if (optimized) {
+      where.optimized_url = { [Sequelize.Op.ne]: null };
+    } else {
+      where.optimized_url = null;
+    }
+  }
+
+  // Map sort fields to column names
+  const sortMapping = {
+    uploadedAt: 'uploaded_at',
+    createdAt: 'created_at',
+    size: 'size',
+    filename: 'filename',
+    type: 'type'
+  };
+
+  const sortField = sortMapping[sortBy] || 'created_at';
+  const order = [[sortField, sortOrder.toUpperCase()]];
+
+  // Execute the query
+  const { count, rows } = await Media.findAndCountAll({
+    where,
+    order,
+    limit,
+    offset
+  });
+
+  return {
+    media: rows,
+    pagination: {
+      total: count,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      pages: Math.ceil(count / limit)
+    }
+  };
+};
+
+/**
+ * Batch delete media files
+ * @param {Array<Number>} mediaIds Array of media IDs to delete
+ * @param {Number} userId User ID
+ * @returns {Promise<Object>} Results of the operation
+ */
+exports.batchDeleteMedia = async (mediaIds, userId) => {
+  const results = {
+    success: [],
+    failed: []
+  };
+
+  // Use transaction to ensure all-or-nothing deletion
+  const transaction = await sequelize.transaction();
+
+  try {
+    // Find all media owned by this user
+    const media = await Media.findAll({
+      where: {
+        id: { [Sequelize.Op.in]: mediaIds },
+        user_id: userId
+      }
+    });
+
+    // Check if any media doesn't exist
+    const foundIds = media.map(item => item.id);
+    const notFoundIds = mediaIds.filter(id => !foundIds.includes(id));
+    
+    // Add not found IDs to failed results
+    notFoundIds.forEach(id => {
+      results.failed.push({
+        id,
+        error: 'Media not found or not owned by user'
+      });
+    });
+
+    // Delete the found media
+    for (const item of media) {
+      try {
+        // Delete the physical file
+        await deleteMediaFile(item.storage_provider, item.storage_path);
+        
+        // Soft delete in database
+        await item.destroy({ transaction });
+        
+        results.success.push({ id: item.id });
+      } catch (error) {
+        results.failed.push({
+          id: item.id,
+          error: error.message
+        });
+      }
+    }
+
+    await transaction.commit();
+    return results;
+  } catch (error) {
+    await transaction.rollback();
+    throw new AppError(`Batch delete failed: ${error.message}`, 500, 'MEDIA_006');
+  }
+};
+
+/**
+ * Batch optimize media files
+ * @param {Array<Number>} mediaIds Array of media IDs to optimize
+ * @param {Number} userId User ID
+ * @param {Object} options Optimization options
+ * @returns {Promise<Object>} Results of the operation
+ */
+exports.batchOptimizeMedia = async (mediaIds, userId, options) => {
+  const results = {
+    success: [],
+    failed: []
+  };
+
+  // Find all media owned by this user
+  const media = await Media.findAll({
+    where: {
+      id: { [Sequelize.Op.in]: mediaIds },
+      user_id: userId,
+      type: 'image' // Only images can be optimized
+    }
+  });
+
+  // Check if any media doesn't exist or isn't an image
+  const foundIds = media.map(item => item.id);
+  const notFoundIds = mediaIds.filter(id => !foundIds.includes(id));
+  
+  // Add not found IDs to failed results
+  notFoundIds.forEach(id => {
+    results.failed.push({
+      id,
+      error: 'Media not found, not owned by user, or not an image'
+    });
+  });
+
+  // Optimize each found media
+  for (const item of media) {
+    try {
+      const optimizedMedia = await this.optimizeMedia(item.id, userId, options);
+      results.success.push({
+        id: optimizedMedia.id,
+        originalSize: optimizedMedia.size,
+        optimizedSize: optimizedMedia.optimized_size,
+        compressionRatio: optimizedMedia.size && optimizedMedia.optimized_size ? 
+          (1 - (optimizedMedia.optimized_size / optimizedMedia.size)) * 100 : 0
+      });
+    } catch (error) {
+      results.failed.push({
+        id: item.id,
+        error: error.message
+      });
+    }
+  }
+
+  return results;
+};
+
+/**
+ * Associate media with another entity
+ * @param {Number} mediaId Media ID
+ * @param {Number} userId User ID
+ * @param {Object} associationData Association data
+ * @returns {Promise<Object>} Updated media object
+ */
+exports.associateMedia = async (mediaId, userId, associationData) => {
+  const { entityType, entityId, relationshipType } = associationData;
+
+  // Find the media
+  const media = await Media.findOne({
+    where: {
+      id: mediaId,
+      user_id: userId
+    }
+  });
+
+  if (!media) {
+    throw new AppError('Media not found or not owned by user', 404, 'MEDIA_001');
+  }
+
+  // Update metadata with association info
+  const metadata = { ...media.metadata };
+  
+  // Initialize associations array if it doesn't exist
+  if (!metadata.associations) {
+    metadata.associations = [];
+  }
+  
+  // Check if association already exists
+  const existingAssociationIndex = metadata.associations.findIndex(
+    assoc => assoc.entityType === entityType && assoc.entityId === parseInt(entityId)
+  );
+  
+  if (existingAssociationIndex !== -1) {
+    // Update existing association
+    metadata.associations[existingAssociationIndex] = {
+      entityType,
+      entityId: parseInt(entityId),
+      relationshipType,
+      associatedAt: new Date().toISOString()
+    };
+  } else {
+    // Add new association
+    metadata.associations.push({
+      entityType,
+      entityId: parseInt(entityId),
+      relationshipType,
+      associatedAt: new Date().toISOString()
+    });
+  }
+  
+  // Update media with new metadata
+  media.metadata = metadata;
+  await media.save();
+  
+  return media;
+};
+
+/**
+ * Generate a temporary URL for accessing a media file
+ * @param {Number} mediaId Media ID
+ * @param {Number} userId User ID
+ * @param {Number} expiresIn Expiration time in seconds
+ * @returns {Promise<Object>} Temporary URL info
+ */
+exports.generateTemporaryUrl = async (mediaId, userId, expiresIn = 3600) => {
+  // Find the media
+  const media = await Media.findOne({
+    where: {
+      id: mediaId,
+      user_id: userId
+    }
+  });
+
+  if (!media) {
+    throw new AppError('Media not found or not owned by user', 404, 'MEDIA_001');
+  }
+
+  // For private media or when specifically requested, generate token
+  const urlToken = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + (expiresIn * 1000)); // Convert seconds to milliseconds
+  
+  // Store token in metadata
+  const metadata = { ...media.metadata };
+  if (!metadata.temporaryUrls) {
+    metadata.temporaryUrls = [];
+  }
+  
+  // Add new token
+  metadata.temporaryUrls.push({
+    token: urlToken,
+    expiresAt: expiresAt.toISOString()
+  });
+  
+  // Clean up expired tokens
+  metadata.temporaryUrls = metadata.temporaryUrls.filter(
+    item => new Date(item.expiresAt) > new Date()
+  );
+  
+  // Update media with new metadata
+  media.metadata = metadata;
+  await media.save();
+  
+  // Generate the temporary URL
+  const baseUrl = process.env.API_BASE_URL || 'http://localhost:3000';
+  const temporaryUrl = `${baseUrl}/api/v1/media/access/${mediaId}?token=${urlToken}`;
+  
+  return {
+    id: media.id,
+    temporaryUrl,
+    expiresAt
+  };
+};
+
+/**
+ * Validate a media access token
+ * @param {Object} media Media object
+ * @param {String} token Access token
+ * @returns {Promise<Boolean>} Whether the token is valid
+ */
+exports.validateMediaAccessToken = async (media, token) => {
+  if (!media.metadata || !media.metadata.temporaryUrls) {
+    return false;
+  }
+  
+  // Find the token in the media's temporaryUrls
+  const tokenData = media.metadata.temporaryUrls.find(item => item.token === token);
+  
+  if (!tokenData) {
+    return false;
+  }
+  
+  // Check if token is expired
+  const expiresAt = new Date(tokenData.expiresAt);
+  const now = new Date();
+  
+  if (expiresAt <= now) {
+    return false;
+  }
+  
+  return true;
+};
+
+/**
+ * Get a readable stream for a media file
+ * @param {Object} media Media object
+ * @returns {Promise<Stream>} Readable stream of the file
+ */
+exports.getMediaFileStream = async (media) => {
+  const { storage_provider, storage_path } = media;
+  
+  // Handle different storage providers
+  switch (storage_provider) {
+    case 'local':
+      // For local storage, create a readable stream from the file
+      const fs = require('fs');
+      const path = require('path');
+      
+      const filePath = path.join(MEDIA_DIR, storage_path);
+      
+      try {
+        // Check if file exists
+        await fs.promises.access(filePath, fs.constants.R_OK);
+        
+        // Create and return a readable stream
+        return fs.createReadStream(filePath);
+      } catch (error) {
+        throw new AppError(`File not accessible: ${error.message}`, 404, 'MEDIA_007');
+      }
+      
+    case 's3':
+      // For S3 storage, use AWS SDK to get a readable stream
+      const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+      
+      const s3Client = new S3Client({
+        region: process.env.AWS_REGION || 'us-east-1',
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        }
+      });
+      
+      try {
+        const command = new GetObjectCommand({
+          Bucket: media.storage_bucket || process.env.AWS_S3_BUCKET,
+          Key: storage_path
+        });
+        
+        const response = await s3Client.send(command);
+        return response.Body;
+      } catch (error) {
+        throw new AppError(`S3 file not accessible: ${error.message}`, 404, 'MEDIA_008');
+      }
+      
+    default:
+      throw new AppError(`Unsupported storage provider: ${storage_provider}`, 400, 'MEDIA_009');
+  }
+}; 
