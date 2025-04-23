@@ -36,6 +36,18 @@ module.exports = {
     url: process.env.REDIS_URL || 'redis://localhost:6379'
   },
   
+  // Cache
+  cache: {
+    enabled: process.env.CACHE_ENABLED === 'true',
+    host: process.env.CACHE_HOST || process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.CACHE_PORT || process.env.REDIS_PORT || '6379', 10),
+    password: process.env.CACHE_PASSWORD || process.env.REDIS_PASSWORD || '',
+    db: parseInt(process.env.CACHE_DB || '0', 10),
+    keyPrefix: process.env.CACHE_KEY_PREFIX || 'portfolio:cache:',
+    ttl: parseInt(process.env.CACHE_TTL || '300', 10), // 5 minutes default TTL
+    experienceApiTtl: parseInt(process.env.CACHE_EXPERIENCE_API_TTL || '600', 10) // 10 minutes for experience API
+  },
+  
   // JWT
   jwt: {
     secret: process.env.JWT_SECRET || 'your-secret-key',

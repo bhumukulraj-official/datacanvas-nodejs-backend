@@ -6,25 +6,86 @@ const { Experience } = require('../models');
 const { NotFoundError, BadRequestError } = require('../../../shared/errors');
 const { Op } = require('sequelize');
 const sequelize = require('../../../shared/database');
+const { redisClient } = require('../../../shared/cache');
+const logger = require('../../../shared/utils/logger');
 
 /**
- * Get all experiences with sorting and pagination
+ * Get all experiences with advanced filtering, sorting and pagination
  */
 exports.getAllExperiences = async (options = {}) => {
-  const { userId, limit = 50, offset = 0, sortBy = 'start_date', order = 'DESC' } = options;
+  const { 
+    userId, 
+    limit = 50, 
+    offset = 0, 
+    sortBy = 'start_date', 
+    order = 'DESC',
+    search = null,
+    technology = null,
+    startDateFrom = null,
+    startDateTo = null,
+    endDateFrom = null,
+    endDateTo = null,
+    company = null,
+    isCurrentOnly = false
+  } = options;
   
   const orderMapping = {
     start_date: 'start_date',
     end_date: 'end_date',
-    company: 'company'
+    company: 'company',
+    title: 'title',
+    created_at: 'created_at',
+    updated_at: 'updated_at'
   };
   
   const sortField = orderMapping[sortBy] || 'start_date';
   
+  // Build where clause
+  const whereClause = { user_id: userId };
+  
+  // Search in title, company, and description
+  if (search) {
+    whereClause[Op.or] = [
+      { title: { [Op.iLike]: `%${search}%` } },
+      { company: { [Op.iLike]: `%${search}%` } },
+      { description: { [Op.iLike]: `%${search}%` } }
+    ];
+  }
+  
+  // Filter by specific company
+  if (company) {
+    whereClause.company = { [Op.iLike]: `%${company}%` };
+  }
+  
+  // Filter by technology
+  if (technology) {
+    whereClause.technologies = { [Op.contains]: [technology] };
+  }
+  
+  // Date range filters
+  if (startDateFrom) {
+    whereClause.start_date = { ...(whereClause.start_date || {}), [Op.gte]: startDateFrom };
+  }
+  
+  if (startDateTo) {
+    whereClause.start_date = { ...(whereClause.start_date || {}), [Op.lte]: startDateTo };
+  }
+  
+  if (endDateFrom) {
+    whereClause.end_date = { ...(whereClause.end_date || {}), [Op.gte]: endDateFrom };
+  }
+  
+  if (endDateTo) {
+    whereClause.end_date = { ...(whereClause.end_date || {}), [Op.lte]: endDateTo };
+  }
+  
+  // Only current experiences (where end_date is null)
+  if (isCurrentOnly) {
+    whereClause.end_date = null;
+  }
+  
   const experiences = await Experience.findAndCountAll({
-    where: {
-      user_id: userId
-    },
+    where: whereClause,
     limit,
     offset,
     order: [[sortField, order]]
@@ -170,6 +231,18 @@ exports.getPublicExperiences = async (userId, options = {}) => {
  * @param {number} userId - The user ID
  */
 exports.getExperienceStatistics = async (userId) => {
+  // Try to get from cache first
+  const cacheKey = `experience:statistics:${userId}`;
+  try {
+    const cachedStats = await redisClient.get(cacheKey);
+    if (cachedStats) {
+      return JSON.parse(cachedStats);
+    }
+  } catch (error) {
+    // Continue with calculation on cache error
+    logger.error('Error getting experience statistics from cache', error);
+  }
+
   // Get all experiences for the user
   const experiences = await Experience.findAll({
     where: {
@@ -249,14 +322,40 @@ exports.getExperienceStatistics = async (userId) => {
     }
   });
   
-  // Calculate years and averages
+  // Convert Set to Array for JSON serialization
+  stats.technologiesUsed = Array.from(stats.technologiesUsed);
+  
+  // Calculate total years of experience
   stats.totalYearsOfExperience = parseFloat((totalDays / 365.25).toFixed(1));
-  stats.averageTenure = experiences.length > 0 
-    ? parseFloat(((tenureSum / experiences.length) / 365.25).toFixed(1)) 
+  
+  // Calculate average tenure
+  stats.averageTenure = experiences.length 
+    ? parseFloat((tenureSum / experiences.length / 365.25).toFixed(1)) 
     : 0;
   
-  // Convert set to array for technologies
-  stats.technologiesUsed = Array.from(stats.technologiesUsed);
+  // Add skill distribution (technology frequency)
+  const techCount = {};
+  experiences.forEach(exp => {
+    if (Array.isArray(exp.technologies)) {
+      exp.technologies.forEach(tech => {
+        techCount[tech] = (techCount[tech] || 0) + 1;
+      });
+    }
+  });
+  
+  // Convert to sorted array
+  stats.technologyDistribution = Object.entries(techCount)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+  
+  // Cache the result
+  try {
+    // Cache for 1 hour (3600 seconds)
+    await redisClient.setex(cacheKey, 3600, JSON.stringify(stats));
+  } catch (error) {
+    // Log error but don't fail the request
+    logger.error('Error caching experience statistics', error);
+  }
   
   return stats;
 };
@@ -349,4 +448,226 @@ exports.exportExperiences = async (userId, format = 'json') => {
   
   // Default to JSON format
   return enhancedExperiences;
+};
+
+/**
+ * Get experiences by technology
+ */
+exports.getExperiencesByTechnology = async (options = {}) => {
+  const { userId, technology, limit = 50, offset = 0 } = options;
+  
+  const experiences = await Experience.findAndCountAll({
+    where: {
+      user_id: userId,
+      technologies: {
+        [Op.contains]: [technology]
+      }
+    },
+    limit,
+    offset,
+    order: [['start_date', 'DESC']]
+  });
+  
+  return experiences;
+};
+
+/**
+ * Get public experiences by technology
+ */
+exports.getPublicExperiencesByTechnology = async (options = {}) => {
+  const { technology, limit = 50, offset = 0 } = options;
+  
+  const experiences = await Experience.findAndCountAll({
+    where: {
+      technologies: {
+        [Op.contains]: [technology]
+      }
+    },
+    attributes: [
+      'id', 'user_id', 'title', 'company', 'start_date', 'end_date', 
+      'description', 'technologies'
+    ],
+    limit,
+    offset,
+    order: [['start_date', 'DESC']]
+  });
+  
+  // Enhance experiences with calculated duration and is_current flag
+  experiences.rows = experiences.rows.map(exp => {
+    const enhancedExp = exp.toJSON ? exp.toJSON() : { ...exp };
+    enhancedExp.duration = calculateExperienceDuration(exp.start_date, exp.end_date);
+    enhancedExp.is_current = !exp.end_date;
+    return enhancedExp;
+  });
+  
+  return experiences;
+};
+
+/**
+ * Get technology distribution for a user
+ */
+exports.getTechnologyDistribution = async (userId) => {
+  // Get all experiences for the user
+  const experiences = await Experience.findAll({
+    where: {
+      user_id: userId
+    },
+    attributes: ['technologies', 'start_date', 'end_date']
+  });
+  
+  // Count technology occurrences
+  const techDistribution = {};
+  const techYearsExperience = {};
+  
+  experiences.forEach(exp => {
+    if (!Array.isArray(exp.technologies)) return;
+    
+    // Calculate duration for this experience
+    const startDate = new Date(exp.start_date);
+    const endDate = exp.end_date ? new Date(exp.end_date) : new Date();
+    const durationYears = (endDate - startDate) / (1000 * 60 * 60 * 24 * 365.25);
+    
+    exp.technologies.forEach(tech => {
+      // Count occurrences
+      techDistribution[tech] = (techDistribution[tech] || 0) + 1;
+      
+      // Sum years of experience with each technology
+      techYearsExperience[tech] = (techYearsExperience[tech] || 0) + durationYears;
+    });
+  });
+  
+  // Format result as array of objects
+  const result = Object.keys(techDistribution).map(tech => ({
+    technology: tech,
+    count: techDistribution[tech],
+    yearsExperience: parseFloat(techYearsExperience[tech].toFixed(1))
+  }));
+  
+  // Sort by count (descending)
+  result.sort((a, b) => b.count - a.count);
+  
+  return result;
+};
+
+/**
+ * Get career timeline data
+ */
+exports.getCareerTimeline = async (userId) => {
+  // Get all experiences for the user
+  const experiences = await Experience.findAll({
+    where: {
+      user_id: userId
+    },
+    order: [['start_date', 'ASC']]
+  });
+  
+  // Transform experiences for timeline visualization
+  const timeline = experiences.map(exp => {
+    const formattedExp = {
+      id: exp.id,
+      title: exp.title,
+      company: exp.company,
+      startDate: exp.start_date,
+      endDate: exp.end_date || 'Present',
+      duration: calculateExperienceDuration(exp.start_date, exp.end_date),
+      isCurrent: !exp.end_date,
+      technologies: exp.technologies || []
+    };
+    
+    return formattedExp;
+  });
+  
+  // Add timeline metadata
+  const timelineData = {
+    items: timeline,
+    metadata: {
+      startDate: timeline.length > 0 ? timeline[0].startDate : null,
+      endDate: timeline.length > 0 ? 
+        (timeline[timeline.length - 1].endDate === 'Present' ? 
+          new Date().toISOString().split('T')[0] : 
+          timeline[timeline.length - 1].endDate) : 
+        null,
+      totalItems: timeline.length
+    }
+  };
+  
+  return timelineData;
+};
+
+/**
+ * Bulk update experiences
+ */
+exports.bulkUpdateExperiences = async (userId, experiences) => {
+  if (!Array.isArray(experiences) || experiences.length === 0) {
+    throw new BadRequestError('Experiences must be a non-empty array');
+  }
+  
+  // Get all experience IDs to update
+  const ids = experiences.map(exp => exp.id);
+  
+  // Verify all experiences belong to the user
+  const existingExperiences = await Experience.findAll({
+    where: {
+      id: { [Op.in]: ids }
+    },
+    attributes: ['id', 'user_id']
+  });
+  
+  // Check ownership of all experiences
+  const unauthorized = existingExperiences.filter(exp => exp.user_id !== userId);
+  if (unauthorized.length > 0) {
+    throw new BadRequestError('You do not have permission to update some of these experiences');
+  }
+  
+  // Check if all experiences exist
+  if (existingExperiences.length !== ids.length) {
+    throw new BadRequestError('Some experience IDs do not exist');
+  }
+  
+  // Update each experience
+  const updatedExperiences = [];
+  for (const expData of experiences) {
+    const { id, ...updateData } = expData;
+    const experience = await Experience.findByPk(id);
+    await experience.update(updateData);
+    updatedExperiences.push(experience);
+  }
+  
+  return updatedExperiences;
+};
+
+/**
+ * Bulk delete experiences
+ */
+exports.bulkDeleteExperiences = async (userId, ids) => {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new BadRequestError('IDs must be a non-empty array');
+  }
+  
+  // Verify all experiences belong to the user
+  const existingExperiences = await Experience.findAll({
+    where: {
+      id: { [Op.in]: ids }
+    },
+    attributes: ['id', 'user_id']
+  });
+  
+  // Check ownership of all experiences
+  const unauthorized = existingExperiences.filter(exp => exp.user_id !== userId);
+  if (unauthorized.length > 0) {
+    throw new BadRequestError('You do not have permission to delete some of these experiences');
+  }
+  
+  // Perform bulk delete
+  const deleted = await Experience.destroy({
+    where: {
+      id: { [Op.in]: ids },
+      user_id: userId
+    }
+  });
+  
+  return {
+    count: deleted,
+    ids: existingExperiences.map(exp => exp.id)
+  };
 }; 

@@ -4,19 +4,42 @@
  */
 const { experienceService } = require('../services');
 const { catchAsync } = require('../../../shared/utils');
+const { clearCacheByPattern } = require('../../../shared/cache');
+const { BadRequestError } = require('../../../shared/errors');
 
 /**
- * Get all experiences with sorting and pagination
+ * Get all experiences with sorting, filtering, and pagination
  */
 exports.getAllExperiences = catchAsync(async (req, res) => {
-  const { limit, offset, sort_by, order } = req.query;
+  const { 
+    limit, 
+    offset, 
+    sort_by, 
+    order,
+    search,
+    technology,
+    company,
+    startDateFrom,
+    startDateTo,
+    endDateFrom,
+    endDateTo,
+    isCurrentOnly
+  } = req.query;
   
   const options = {
     limit: parseInt(limit, 10) || 50,
     offset: parseInt(offset, 10) || 0,
     sortBy: sort_by || 'start_date',
     order: order?.toLowerCase() === 'asc' ? 'ASC' : 'DESC',
-    userId: req.user.id
+    userId: req.user.id,
+    search,
+    technology,
+    company,
+    startDateFrom,
+    startDateTo,
+    endDateFrom,
+    endDateTo,
+    isCurrentOnly
   };
   
   const { count, rows } = await experienceService.getAllExperiences(options);
@@ -27,7 +50,17 @@ exports.getAllExperiences = catchAsync(async (req, res) => {
     metadata: {
       total: count,
       limit: options.limit,
-      offset: options.offset
+      offset: options.offset,
+      filters: {
+        search,
+        technology,
+        company,
+        startDateFrom,
+        startDateTo,
+        endDateFrom,
+        endDateTo,
+        isCurrentOnly
+      }
     }
   });
 });
@@ -68,6 +101,9 @@ exports.createExperience = catchAsync(async (req, res) => {
   
   const experience = await experienceService.createExperience(experienceData);
   
+  // Clear cache for this user's experience data
+  await clearCacheByPattern(`experience:*:${req.user.id}`);
+  
   res.status(201).json({
     success: true,
     data: experience
@@ -94,6 +130,9 @@ exports.updateExperience = catchAsync(async (req, res) => {
   
   const experience = await experienceService.updateExperience(id, req.body);
   
+  // Clear cache for this user's experience data
+  await clearCacheByPattern(`experience:*:${existingExperience.user_id}`);
+  
   res.status(200).json({
     success: true,
     data: experience
@@ -119,6 +158,9 @@ exports.deleteExperience = catchAsync(async (req, res) => {
   }
   
   await experienceService.deleteExperience(id);
+  
+  // Clear cache for this user's experience data
+  await clearCacheByPattern(`experience:*:${existingExperience.user_id}`);
   
   res.status(200).json({
     success: true,
@@ -175,6 +217,9 @@ exports.importExperiences = catchAsync(async (req, res) => {
   const { experiences } = req.body;
   
   const result = await experienceService.importExperiences(userId, experiences);
+  
+  // Clear cache for this user's experience data
+  await clearCacheByPattern(`experience:*:${userId}`);
   
   res.status(201).json({
     success: true,
@@ -242,5 +287,139 @@ exports.exportExperiences = catchAsync(async (req, res) => {
   res.status(200).json({
     success: true,
     data: result
+  });
+});
+
+/**
+ * Get experiences by technology
+ */
+exports.getExperiencesByTechnology = catchAsync(async (req, res) => {
+  const { technology } = req.params;
+  const { limit, offset } = req.query;
+  
+  const options = {
+    limit: parseInt(limit, 10) || 50,
+    offset: parseInt(offset, 10) || 0,
+    userId: req.user.id,
+    technology
+  };
+  
+  const { count, rows } = await experienceService.getExperiencesByTechnology(options);
+  
+  res.status(200).json({
+    success: true,
+    data: rows,
+    metadata: {
+      total: count,
+      limit: options.limit,
+      offset: options.offset,
+      technology
+    }
+  });
+});
+
+/**
+ * Get public experiences by technology
+ * This endpoint is public (no auth required)
+ */
+exports.getPublicExperiencesByTechnology = catchAsync(async (req, res) => {
+  const { technology } = req.params;
+  const { limit, offset } = req.query;
+  
+  const options = {
+    limit: parseInt(limit, 10) || 50,
+    offset: parseInt(offset, 10) || 0,
+    technology
+  };
+  
+  const { count, rows } = await experienceService.getPublicExperiencesByTechnology(options);
+  
+  res.status(200).json({
+    success: true,
+    data: rows,
+    metadata: {
+      total: count,
+      limit: options.limit,
+      offset: options.offset,
+      technology
+    }
+  });
+});
+
+/**
+ * Get technology distribution
+ */
+exports.getTechnologyDistribution = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  
+  const distribution = await experienceService.getTechnologyDistribution(userId);
+  
+  res.status(200).json({
+    success: true,
+    data: distribution
+  });
+});
+
+/**
+ * Get career timeline
+ */
+exports.getCareerTimeline = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  
+  const timeline = await experienceService.getCareerTimeline(userId);
+  
+  res.status(200).json({
+    success: true,
+    data: timeline
+  });
+});
+
+/**
+ * Bulk update experiences
+ */
+exports.bulkUpdateExperiences = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const { experiences } = req.body;
+  
+  if (!Array.isArray(experiences) || experiences.length === 0) {
+    throw new BadRequestError('Invalid experiences data');
+  }
+  
+  const result = await experienceService.bulkUpdateExperiences(userId, experiences);
+  
+  // Clear cache
+  await clearCacheByPattern('experience:*');
+  
+  res.status(200).json({
+    success: true,
+    data: {
+      updated: result.length,
+      experiences: result
+    }
+  });
+});
+
+/**
+ * Bulk delete experiences
+ */
+exports.bulkDeleteExperiences = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const { ids } = req.body;
+  
+  if (!Array.isArray(ids) || ids.length === 0) {
+    throw new BadRequestError('Invalid IDs provided');
+  }
+  
+  const result = await experienceService.bulkDeleteExperiences(userId, ids);
+  
+  // Clear cache
+  await clearCacheByPattern('experience:*');
+  
+  res.status(200).json({
+    success: true,
+    data: {
+      deleted: result.count,
+      ids: result.ids
+    }
   });
 }); 
