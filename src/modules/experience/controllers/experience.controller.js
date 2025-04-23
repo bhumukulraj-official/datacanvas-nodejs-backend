@@ -180,4 +180,67 @@ exports.importExperiences = catchAsync(async (req, res) => {
     success: true,
     data: result
   });
+});
+
+/**
+ * Get public experiences for a user
+ * This endpoint is public (no auth required)
+ */
+exports.getPublicExperiences = catchAsync(async (req, res) => {
+  const { userId } = req.params;
+  const { limit, offset } = req.query;
+  
+  const options = {
+    limit: parseInt(limit, 10) || 50,
+    offset: parseInt(offset, 10) || 0
+  };
+  
+  const { count, rows } = await experienceService.getPublicExperiences(userId, options);
+  
+  res.status(200).json({
+    success: true,
+    data: rows,
+    metadata: {
+      total: count,
+      limit: options.limit,
+      offset: options.offset
+    }
+  });
+});
+
+/**
+ * Get experience statistics
+ */
+exports.getExperienceStatistics = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  
+  const statistics = await experienceService.getExperienceStatistics(userId);
+  
+  res.status(200).json({
+    success: true,
+    data: statistics
+  });
+});
+
+/**
+ * Export experiences
+ */
+exports.exportExperiences = catchAsync(async (req, res) => {
+  const userId = req.user.id;
+  const { format } = req.query;
+  
+  const result = await experienceService.exportExperiences(userId, format);
+  
+  // Handle different export formats
+  if (format === 'csv') {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="experiences_export.csv"');
+    return res.status(200).send(result);
+  }
+  
+  // Default to JSON
+  res.status(200).json({
+    success: true,
+    data: result
+  });
 }); 

@@ -133,4 +133,46 @@ exports.getExperience = [
     .optional()
     .isIn(['asc', 'desc'])
     .withMessage('Order must be one of: asc, desc')
+];
+
+// Validator for getting public experiences for a user
+exports.getUserPublicExperiences = [
+  param('userId')
+    .isInt({ min: 1 })
+    .withMessage('User ID must be a positive integer'),
+    
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  
+  query('offset')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('Offset must be a non-negative integer')
+];
+
+// Validator for importing experiences
+exports.importExperiences = [
+  body('experiences')
+    .isArray({ min: 1 })
+    .withMessage('Experiences must be a non-empty array'),
+  
+  body('experiences.*.title')
+    .notEmpty()
+    .withMessage('Each experience must have a title')
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Job title must be between 2 and 100 characters'),
+  
+  body('experiences.*.company')
+    .notEmpty()
+    .withMessage('Each experience must have a company')
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Company name must be between 2 and 100 characters'),
+  
+  body('experiences.*.start_date')
+    .notEmpty()
+    .withMessage('Each experience must have a start date')
+    .isISO8601()
+    .withMessage('Start date must be a valid date')
 ]; 
