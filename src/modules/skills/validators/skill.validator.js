@@ -164,4 +164,35 @@ exports.updateSkillOrder = [
   body('skillsOrder.*.displayOrder')
     .isInt({ min: 0 })
     .withMessage('Each display order must be a non-negative integer')
+];
+
+// Add validator for bulk delete
+exports.bulkDeleteSkills = [
+  body('skillIds')
+    .isArray({ min: 1 })
+    .withMessage('Skill IDs must be a non-empty array'),
+  
+  body('skillIds.*')
+    .isInt({ min: 1 })
+    .withMessage('Each skill ID must be a positive integer')
+];
+
+// Add validator for importing skills
+exports.importSkills = [
+  body('skills')
+    .isArray({ min: 1 })
+    .withMessage('Skills must be a non-empty array'),
+  
+  body('skills.*.name')
+    .notEmpty()
+    .withMessage('Each skill must have a name')
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Skill name must be between 2 and 100 characters')
+];
+
+// Add validator for public access to user skills
+exports.getUserPublicSkills = [
+  param('userId')
+    .isInt({ min: 1 })
+    .withMessage('User ID must be a positive integer')
 ]; 
