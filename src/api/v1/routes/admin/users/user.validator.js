@@ -57,6 +57,41 @@ exports.validateListUsers = [
     .isString()
     .withMessage('Search must be a string'),
   
+  query('sort_by')
+    .optional()
+    .isIn(['username', 'email', 'created_at', 'updated_at', 'last_login', 'role', 'status'])
+    .withMessage('Sort field must be one of: username, email, created_at, updated_at, last_login, role, status'),
+    
+  query('sort_order')
+    .optional()
+    .isIn(['asc', 'desc', 'ASC', 'DESC'])
+    .withMessage('Sort order must be one of: asc, desc'),
+    
+  query('created_after')
+    .optional()
+    .isISO8601()
+    .withMessage('Created after date must be a valid ISO 8601 date'),
+    
+  query('created_before')
+    .optional()
+    .isISO8601()
+    .withMessage('Created before date must be a valid ISO 8601 date'),
+    
+  query('last_login_after')
+    .optional()
+    .isISO8601()
+    .withMessage('Last login after date must be a valid ISO 8601 date'),
+    
+  query('last_login_before')
+    .optional()
+    .isISO8601()
+    .withMessage('Last login before date must be a valid ISO 8601 date'),
+    
+  query('email_verified')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('Email verified must be true or false'),
+  
   handleValidationErrors
 ];
 
@@ -191,6 +226,144 @@ exports.validateChangeStatus = [
     .isString()
     .isLength({ max: 255 })
     .withMessage('Reason must be less than 255 characters'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate export users request
+ */
+exports.validateExportUsers = [
+  query('role')
+    .optional()
+    .isIn(['admin', 'editor', 'user'])
+    .withMessage('Role must be one of: admin, editor, user'),
+  
+  query('status')
+    .optional()
+    .isIn(['active', 'inactive', 'suspended', 'banned'])
+    .withMessage('Status must be one of: active, inactive, suspended, banned'),
+    
+  query('created_after')
+    .optional()
+    .isISO8601()
+    .withMessage('Created after date must be a valid ISO 8601 date'),
+    
+  query('created_before')
+    .optional()
+    .isISO8601()
+    .withMessage('Created before date must be a valid ISO 8601 date'),
+    
+  query('email_verified')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('Email verified must be true or false'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate bulk change user status request
+ */
+exports.validateBulkChangeStatus = [
+  body('userIds')
+    .isArray({ min: 1 })
+    .withMessage('User IDs must be a non-empty array'),
+  
+  body('userIds.*')
+    .isInt({ min: 1 })
+    .withMessage('Each user ID must be a positive integer'),
+  
+  body('status')
+    .isIn(['active', 'inactive', 'suspended', 'banned'])
+    .withMessage('Status must be one of: active, inactive, suspended, banned'),
+  
+  body('reason')
+    .optional()
+    .isString()
+    .isLength({ max: 255 })
+    .withMessage('Reason must be less than 255 characters'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate bulk change user role request
+ */
+exports.validateBulkChangeRole = [
+  body('userIds')
+    .isArray({ min: 1 })
+    .withMessage('User IDs must be a non-empty array'),
+  
+  body('userIds.*')
+    .isInt({ min: 1 })
+    .withMessage('Each user ID must be a positive integer'),
+  
+  body('role')
+    .isIn(['admin', 'editor', 'user'])
+    .withMessage('Role must be one of: admin, editor, user'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate bulk delete users request
+ */
+exports.validateBulkDeleteUsers = [
+  body('userIds')
+    .isArray({ min: 1 })
+    .withMessage('User IDs must be a non-empty array'),
+  
+  body('userIds.*')
+    .isInt({ min: 1 })
+    .withMessage('Each user ID must be a positive integer'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate get user sessions request
+ */
+exports.validateGetUserSessions = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('User ID must be a positive integer'),
+  
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate revoke user session request
+ */
+exports.validateRevokeUserSession = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('User ID must be a positive integer'),
+  
+  param('sessionId')
+    .isInt({ min: 1 })
+    .withMessage('Session ID must be a positive integer'),
+  
+  handleValidationErrors
+];
+
+/**
+ * Validate revoke all user sessions request
+ */
+exports.validateRevokeAllUserSessions = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('User ID must be a positive integer'),
   
   handleValidationErrors
 ]; 

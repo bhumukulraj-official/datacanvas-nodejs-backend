@@ -221,4 +221,169 @@ exports.getUserAuditLogs = async (req, res, next) => {
     logger.error('Admin get user audit logs error', { error, userId: req.params.id });
     next(error);
   }
+};
+
+/**
+ * Export users as CSV
+ */
+exports.exportUsers = async (req, res, next) => {
+  try {
+    const { role, status, created_after, created_before, email_verified } = req.query;
+    
+    const options = {
+      role,
+      status,
+      created_after,
+      created_before,
+      email_verified
+    };
+    
+    const csv = await userService.exportUsers(options);
+    
+    // Set headers for CSV download
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=users.csv');
+    
+    res.status(200).send(csv);
+  } catch (error) {
+    logger.error('Admin export users error', { error });
+    next(error);
+  }
+};
+
+/**
+ * Bulk change user status
+ */
+exports.bulkChangeUserStatus = async (req, res, next) => {
+  try {
+    const { userIds, status, reason } = req.body;
+    const adminId = req.user.id;
+    
+    const result = await userService.bulkChangeUserStatus(userIds, status, reason, adminId);
+    
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Changed status to ${status} for ${result.success} users`
+    });
+  } catch (error) {
+    logger.error('Admin bulk change user status error', { error });
+    next(error);
+  }
+};
+
+/**
+ * Bulk change user role
+ */
+exports.bulkChangeUserRole = async (req, res, next) => {
+  try {
+    const { userIds, role } = req.body;
+    const adminId = req.user.id;
+    
+    const result = await userService.bulkChangeUserRole(userIds, role, adminId);
+    
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Changed role to ${role} for ${result.success} users`
+    });
+  } catch (error) {
+    logger.error('Admin bulk change user role error', { error });
+    next(error);
+  }
+};
+
+/**
+ * Bulk delete users
+ */
+exports.bulkDeleteUsers = async (req, res, next) => {
+  try {
+    const { userIds } = req.body;
+    const adminId = req.user.id;
+    
+    const result = await userService.bulkDeleteUsers(userIds, adminId);
+    
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Deleted ${result.success} users`
+    });
+  } catch (error) {
+    logger.error('Admin bulk delete users error', { error });
+    next(error);
+  }
+};
+
+/**
+ * Get user sessions
+ */
+exports.getUserSessions = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    
+    const options = {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10)
+    };
+    
+    const result = await userService.getUserSessions(id, options);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        sessions: result.sessions,
+        pagination: result.pagination
+      },
+      message: 'User sessions retrieved successfully'
+    });
+  } catch (error) {
+    logger.error('Admin get user sessions error', { error, userId: req.params.id });
+    next(error);
+  }
+};
+
+/**
+ * Revoke user session
+ */
+exports.revokeUserSession = async (req, res, next) => {
+  try {
+    const { id, sessionId } = req.params;
+    const adminId = req.user.id;
+    
+    await userService.revokeUserSession(id, sessionId, adminId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'User session revoked successfully'
+    });
+  } catch (error) {
+    logger.error('Admin revoke user session error', { 
+      error, 
+      userId: req.params.id,
+      sessionId: req.params.sessionId
+    });
+    next(error);
+  }
+};
+
+/**
+ * Revoke all user sessions
+ */
+exports.revokeAllUserSessions = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user.id;
+    
+    const count = await userService.revokeAllUserSessions(id, adminId);
+    
+    res.status(200).json({
+      success: true,
+      data: { count },
+      message: `${count} user sessions revoked successfully`
+    });
+  } catch (error) {
+    logger.error('Admin revoke all user sessions error', { error, userId: req.params.id });
+    next(error);
+  }
 }; 
