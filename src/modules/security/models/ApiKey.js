@@ -10,61 +10,44 @@ ApiKey.init(
       primaryKey: true,
       autoIncrement: true,
     },
-    user_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'users',
-        key: 'id',
-      },
-      onDelete: 'CASCADE',
-    },
     name: {
       type: DataTypes.STRING(100),
       allowNull: false,
+      validate: {
+        len: [2, 100],
+      }
     },
-    key: {
-      type: DataTypes.STRING(64),
-      allowNull: false,
-      unique: true,
-    },
-    secret_hash: {
+    key_hash: {
       type: DataTypes.STRING(255),
       allowNull: false,
-    },
-    status: {
-      type: DataTypes.STRING(20),
-      allowNull: false,
-      defaultValue: 'active',
       validate: {
-        isIn: [['active', 'revoked', 'expired']]
+        len: [32, 255],
       }
     },
     permissions: {
-      type: DataTypes.JSONB,
-      defaultValue: {},
+      type: DataTypes.ARRAY(DataTypes.INTEGER),
+      defaultValue: [],
       allowNull: false,
     },
-    last_used_at: {
-      type: DataTypes.DATE,
-      allowNull: true,
+    status: {
+      type: DataTypes.ENUM('active', 'inactive', 'revoked'),
+      allowNull: false,
+      defaultValue: 'active',
     },
     expires_at: {
       type: DataTypes.DATE,
       allowNull: true,
-    },
-    rate_limit: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 100,
-    },
-    rate_limit_period: {
-      type: DataTypes.STRING(10),
-      allowNull: false,
-      defaultValue: 'minute',
       validate: {
-        isIn: [['second', 'minute', 'hour', 'day']]
+        isValidExpiry(value) {
+          if (value && value <= this.created_at) {
+            throw new Error('Expiry date must be after creation date');
+          }
+        }
       }
+    },
+    last_used_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
     created_at: {
       type: DataTypes.DATE,
@@ -92,12 +75,8 @@ ApiKey.init(
     deletedAt: 'deleted_at',
     indexes: [
       {
-        name: 'idx_api_keys_user_id',
-        fields: ['user_id'],
-      },
-      {
-        name: 'idx_api_keys_key',
-        fields: ['key'],
+        name: 'idx_api_keys_key_hash',
+        fields: ['key_hash'],
         unique: true,
       },
       {
@@ -107,12 +86,5 @@ ApiKey.init(
     ],
   }
 );
-
-ApiKey.associate = (models) => {
-  ApiKey.belongsTo(models.User, {
-    foreignKey: 'user_id',
-    as: 'user'
-  });
-};
 
 module.exports = ApiKey; 

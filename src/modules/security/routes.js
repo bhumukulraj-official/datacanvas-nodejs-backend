@@ -1,5 +1,5 @@
 const express = require('express');
-const apiKeyController = require('./controllers/api-key.controller');
+const apiKeyController = require('./controllers/unified-api-key.controller');
 const auditController = require('./controllers/audit.controller');
 const auth = require('../../shared/middleware/auth.middleware');
 const validate = require('../../shared/middleware/validate.middleware');
@@ -52,27 +52,35 @@ router.delete('/api-keys/:id',
 );
 
 /**
- * Audit Log routes - Admin only
+ * New API Key analytics and metadata routes
  */
-router.get('/audit-logs', 
+router.get('/api-keys/stats/usage', 
   auth.requireAuth, 
   auth.requireRole('admin'), 
-  validate(auditLogValidator.listAuditLogs), 
-  auditController.listAuditLogs
+  apiKeyController.getApiKeyUsageStats
 );
 
-router.post('/audit-logs', 
+router.get('/api-keys/permissions', 
   auth.requireAuth, 
   auth.requireRole('admin'), 
-  validate(auditLogValidator.createAuditLog), 
-  auditController.createAuditLog
+  apiKeyController.getApiKeyPermissions
 );
 
-router.get('/audit-logs/summary', 
-  auth.requireAuth, 
-  auth.requireRole('admin'), 
-  validate(auditLogValidator.getSecuritySummary), 
-  auditController.getSecuritySummary
+/**
+ * Audit Log routes
+ */
+router.get('/audit-logs',
+  auth.requireAuth,
+  auth.requireRole('admin'),
+  validate(auditLogValidator.getAuditLogs),
+  auditController.getAuditLogs
+);
+
+router.get('/audit-logs/:id',
+  auth.requireAuth,
+  auth.requireRole('admin'),
+  validate(auditLogValidator.getAuditLogById),
+  auditController.getAuditLogById
 );
 
 module.exports = router; 

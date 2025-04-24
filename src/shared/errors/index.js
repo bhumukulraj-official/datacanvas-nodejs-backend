@@ -82,9 +82,14 @@ class DatabaseError extends AppError {
   }
 }
 
+/**
+ * Rate Limit Error
+ * Thrown when a rate limit is exceeded
+ */
 class RateLimitError extends AppError {
-  constructor(message = 'Rate limit exceeded') {
-    super(message, 429);
+  constructor(message = 'Rate limit exceeded', statusCode = 429) {
+    super(message, statusCode);
+    this.name = 'RateLimitError';
     this.code = 'RATE_001';
   }
 }

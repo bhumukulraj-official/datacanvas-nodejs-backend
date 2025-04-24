@@ -21,25 +21,27 @@ exports.createApiKey = [
   body('permissions')
     .optional()
     .isArray()
-    .withMessage('Permissions must be an array'),
+    .withMessage('Permissions must be an array of integers'),
+  
+  body('permissions.*')
+    .optional()
+    .isInt()
+    .withMessage('Each permission must be an integer'),
   
   body('status')
     .optional()
     .isIn(['active', 'inactive', 'revoked'])
     .withMessage('Status must be either active, inactive, or revoked'),
   
-  body('expires_at')
+  body('expiresIn')
     .optional()
-    .isISO8601()
-    .withMessage('Expires at must be a valid date')
-    .custom((value) => {
-      const now = new Date();
-      const expiresAt = new Date(value);
-      if (expiresAt <= now) {
-        throw new Error('Expiry date must be in the future');
-      }
-      return true;
-    })
+    .isInt({ min: 1 })
+    .withMessage('Expiration value must be a positive integer'),
+  
+  body('expiresUnit')
+    .optional()
+    .isIn(['day', 'month', 'year'])
+    .withMessage('Expiration unit must be day, month, or year')
 ];
 
 /**
@@ -59,25 +61,27 @@ exports.updateApiKey = [
   body('permissions')
     .optional()
     .isArray()
-    .withMessage('Permissions must be an array'),
+    .withMessage('Permissions must be an array of integers'),
+  
+  body('permissions.*')
+    .optional()
+    .isInt()
+    .withMessage('Each permission must be an integer'),
   
   body('status')
     .optional()
     .isIn(['active', 'inactive', 'revoked'])
     .withMessage('Status must be either active, inactive, or revoked'),
   
-  body('expires_at')
+  body('expiresIn')
     .optional()
-    .isISO8601()
-    .withMessage('Expires at must be a valid date')
-    .custom((value) => {
-      const now = new Date();
-      const expiresAt = new Date(value);
-      if (expiresAt <= now) {
-        throw new Error('Expiry date must be in the future');
-      }
-      return true;
-    })
+    .isInt({ min: 1 })
+    .withMessage('Expiration value must be a positive integer'),
+  
+  body('expiresUnit')
+    .optional()
+    .isIn(['day', 'month', 'year'])
+    .withMessage('Expiration unit must be day, month, or year')
 ];
 
 /**
@@ -96,4 +100,19 @@ exports.deleteApiKey = [
   param('id')
     .isInt()
     .withMessage('API key ID must be an integer')
+];
+
+/**
+ * Validation for API key usage statistics
+ */
+exports.getApiKeyUsageStats = [
+  query('timeframe')
+    .optional()
+    .matches(/^\d+[dwm]$/)
+    .withMessage('Timeframe must be in format like 30d, 4w, 6m (days, weeks, months)'),
+  
+  query('groupBy')
+    .optional()
+    .isIn(['hourly', 'daily', 'weekly', 'monthly'])
+    .withMessage('Group by must be hourly, daily, weekly, or monthly')
 ]; 
