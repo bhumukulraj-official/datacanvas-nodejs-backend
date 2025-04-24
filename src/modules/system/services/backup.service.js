@@ -1,393 +1,454 @@
 /**
- * Backup service
- * Handles database backup and restore operations
+ * Backup Service
+ * Handles database backup, restore, and backup management
+ * Uses a file-based registry to track backups without database dependencies
  */
-const { exec } = require('child_process');
-const fs = require('fs');
+const fs = require('fs').promises;
 const path = require('path');
+const { exec } = require('child_process');
 const util = require('util');
 const { v4: uuidv4 } = require('uuid');
+const { sequelize } = require('../../../config/database');
 const logger = require('../../../shared/utils/logger');
-const config = require('../../../shared/config');
-const { sequelize } = require('../../../shared/database');
+const asyncLock = require('async-lock');
 
-// Promisify exec for async/await usage
 const execPromise = util.promisify(exec);
 
-// Create backup directory if it doesn't exist
-const BACKUP_DIR = path.join(process.cwd(), 'backups');
+// Lock for synchronizing access to the backup registry file
+const lock = new asyncLock();
 
-if (!fs.existsSync(BACKUP_DIR)) {
-  fs.mkdirSync(BACKUP_DIR, { recursive: true });
-}
+// Define backup storage locations
+const BACKUP_DIR = process.env.BACKUP_DIR || path.join(process.cwd(), 'backups');
+const REGISTRY_FILE = path.join(BACKUP_DIR, 'backup-registry.json');
+
+// Ensure backup directory exists
+const ensureBackupDirExists = async () => {
+  try {
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+  } catch (error) {
+    logger.error(`Failed to create backup directory: ${error.message}`);
+    throw new Error('Failed to create backup directory');
+  }
+};
+
+// Initialize backup registry if it doesn't exist
+const initializeRegistry = async () => {
+  try {
+    await ensureBackupDirExists();
+    
+    try {
+      await fs.access(REGISTRY_FILE);
+    } catch (error) {
+      // Registry file doesn't exist, create it
+      await fs.writeFile(REGISTRY_FILE, JSON.stringify({ backups: [] }));
+      logger.info('Created new backup registry file');
+    }
+  } catch (error) {
+    logger.error(`Failed to initialize backup registry: ${error.message}`);
+    throw new Error('Failed to initialize backup system');
+  }
+};
+
+// Read the backup registry
+const readRegistry = async () => {
+  try {
+    const data = await fs.readFile(REGISTRY_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // If the file doesn't exist, initialize it
+      await initializeRegistry();
+      return { backups: [] };
+    }
+    logger.error(`Failed to read backup registry: ${error.message}`);
+    throw new Error('Failed to read backup registry');
+  }
+};
+
+// Write to the backup registry (with locking to prevent race conditions)
+const writeRegistry = async (registry) => {
+  return lock.acquire('registry', async () => {
+    try {
+      await fs.writeFile(REGISTRY_FILE, JSON.stringify(registry, null, 2));
+    } catch (error) {
+      logger.error(`Failed to write backup registry: ${error.message}`);
+      throw new Error('Failed to update backup registry');
+    }
+  });
+};
 
 /**
  * Create a database backup
  * @param {Object} options - Backup options
- * @param {String} options.description - Backup description
- * @param {String} options.createdBy - User ID who created the backup
- * @returns {Promise<Object>} Backup details
+ * @param {string} options.description - Backup description
+ * @param {number} options.createdBy - ID of user creating the backup
+ * @returns {Object} Backup details
  */
-const createBackup = async (options = {}) => {
+exports.createBackup = async ({ description, createdBy }) => {
+  // Generate unique ID and filename for the backup
+  const backupId = uuidv4();
+  const timestamp = new Date().toISOString().replace(/:/g, '-');
+  const filename = `backup-${timestamp}-${backupId}.sql`;
+  const backupPath = path.join(BACKUP_DIR, filename);
+  
   try {
-    const { description = 'Manual backup', createdBy = 'system' } = options;
-
-    // Generate backup file name
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupId = uuidv4().slice(0, 8);
-    const fileName = `backup-${timestamp}-${backupId}.sql.gz`;
-    const filePath = path.join(BACKUP_DIR, fileName);
-
-    // Get database connection details from config
-    const dbConfig = config.database;
-    const { database, username, password, host, port } = dbConfig;
-
-    // Create command with password handling
-    let command;
-
-    if (password) {
-      // Use PGPASSWORD environment variable to avoid password in command
-      command = `PGPASSWORD='${password}' pg_dump -h ${host} -p ${port} -U ${username} -d ${database} --clean --if-exists | gzip > ${filePath}`;
-    } else {
-      command = `pg_dump -h ${host} -p ${port} -U ${username} -d ${database} --clean --if-exists | gzip > ${filePath}`;
+    await ensureBackupDirExists();
+    
+    const dbConfig = sequelize.config;
+    const dbName = dbConfig.database;
+    const dbHost = dbConfig.host;
+    const dbPort = dbConfig.port;
+    const dbUser = dbConfig.username;
+    const dbPassword = dbConfig.password;
+    
+    // Execute pg_dump to create backup
+    logger.info(`Creating database backup: ${filename}`);
+    
+    // Use environment variables for password to avoid it appearing in process list
+    process.env.PGPASSWORD = dbPassword;
+    
+    const command = `pg_dump -h ${dbHost} -p ${dbPort} -U ${dbUser} -F p -b -v -f "${backupPath}" ${dbName}`;
+    
+    const { stderr } = await execPromise(command);
+    
+    // Log any warnings but don't fail
+    if (stderr) {
+      logger.warn(`pg_dump warnings: ${stderr}`);
     }
-
-    // Execute backup command
-    logger.info(`Starting database backup to ${fileName}`);
-    await execPromise(command);
-
-    // Check if backup file was created and get size
-    const stats = fs.statSync(filePath);
-    const fileSizeBytes = stats.size;
-    const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(2);
-
-    const backupDetails = {
+    
+    // Get file size
+    const stats = await fs.stat(backupPath);
+    const sizeInBytes = stats.size;
+    
+    // Create backup registry entry
+    const backup = {
       id: backupId,
-      fileName,
-      filePath,
-      fileSizeBytes,
-      fileSizeMB: `${fileSizeMB} MB`,
-      timestamp: new Date().toISOString(),
-      description,
-      createdBy
+      filename,
+      description: description || `Backup created on ${new Date().toISOString()}`,
+      createdBy,
+      createdAt: new Date().toISOString(),
+      size: formatBytes(sizeInBytes),
+      sizeInBytes,
+      path: backupPath
     };
-
-    logger.info(`Database backup completed: ${fileName} (${fileSizeMB} MB)`);
-
-    // Save backup record to database
-    await sequelize.query(`
-      INSERT INTO backup_history
-      (backup_id, file_name, file_path, file_size_bytes, description, created_by, created_at)
-      VALUES
-      (:backup_id, :file_name, :file_path, :file_size_bytes, :description, :created_by, :created_at)
-    `, {
-      replacements: {
-        backup_id: backupId,
-        file_name: fileName,
-        file_path: filePath,
-        file_size_bytes: fileSizeBytes,
-        description,
-        created_by: createdBy,
-        created_at: new Date()
-      },
-      type: sequelize.QueryTypes.INSERT
-    }).catch(error => {
-      // If table doesn't exist yet, just log it
-      logger.warn(`Failed to record backup history: ${error.message}`);
-    });
-
-    return backupDetails;
+    
+    // Update registry
+    const registry = await readRegistry();
+    registry.backups.push(backup);
+    await writeRegistry(registry);
+    
+    return backup;
   } catch (error) {
-    logger.error(`Backup failed: ${error.message}`, { error });
-    throw new Error(`Backup operation failed: ${error.message}`);
+    logger.error(`Backup creation failed: ${error.message}`);
+    // Attempt to clean up failed backup file
+    try {
+      await fs.access(backupPath);
+      await fs.unlink(backupPath);
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+    throw new Error(`Failed to create backup: ${error.message}`);
+  } finally {
+    // Clear environment variable
+    delete process.env.PGPASSWORD;
   }
 };
 
 /**
  * Restore database from backup
  * @param {Object} options - Restore options
- * @param {String} options.backupId - Backup ID to restore
- * @param {String} options.restoredBy - User ID who performed the restore
- * @returns {Promise<Object>} Restore operation details
+ * @param {string} options.backupId - ID of backup to restore
+ * @param {number} options.restoredBy - ID of user performing restore
+ * @returns {Object} Restore result
  */
-const restoreFromBackup = async (options = {}) => {
+exports.restoreFromBackup = async ({ backupId, restoredBy }) => {
+  const registry = await readRegistry();
+  const backup = registry.backups.find(b => b.id === backupId);
+  
+  if (!backup) {
+    throw new Error(`Backup with ID ${backupId} not found`);
+  }
+  
+  const backupPath = backup.path;
+  
   try {
-    const { backupId, restoredBy = 'system' } = options;
-    
-    if (!backupId) {
-      throw new Error('Backup ID is required');
-    }
-
-    // Find backup record
-    let backupRecord;
-    
-    try {
-      // Try to get record from database
-      const result = await sequelize.query(`
-        SELECT * FROM backup_history
-        WHERE backup_id = :backup_id
-        ORDER BY created_at DESC
-        LIMIT 1
-      `, {
-        replacements: { backup_id: backupId },
-        type: sequelize.QueryTypes.SELECT
-      });
-      
-      if (result && result.length > 0) {
-        backupRecord = result[0];
-      }
-    } catch (error) {
-      // If table doesn't exist, we'll try to find file manually
-      logger.warn(`Failed to query backup history: ${error.message}`);
-    }
-    
-    // If record not found, try to find file manually
-    if (!backupRecord) {
-      // Find backup file by ID in filename
-      const files = fs.readdirSync(BACKUP_DIR);
-      const backupFile = files.find(file => file.includes(backupId));
-      
-      if (!backupFile) {
-        throw new Error(`Backup with ID ${backupId} not found`);
-      }
-      
-      backupRecord = {
-        file_path: path.join(BACKUP_DIR, backupFile)
-      };
-    }
-
     // Check if backup file exists
-    if (!fs.existsSync(backupRecord.file_path)) {
-      throw new Error(`Backup file not found: ${backupRecord.file_path}`);
-    }
-
-    // Get database connection details from config
-    const dbConfig = config.database;
-    const { database, username, password, host, port } = dbConfig;
-
-    // Create restore command
-    let command;
-
-    if (password) {
-      // Use PGPASSWORD environment variable to avoid password in command
-      command = `gunzip -c ${backupRecord.file_path} | PGPASSWORD='${password}' psql -h ${host} -p ${port} -U ${username} -d ${database}`;
-    } else {
-      command = `gunzip -c ${backupRecord.file_path} | psql -h ${host} -p ${port} -U ${username} -d ${database}`;
-    }
-
-    // Execute restore command
-    logger.info(`Starting database restore from ${path.basename(backupRecord.file_path)}`);
-    await execPromise(command);
-
-    // Log restore operation
-    const restoreDetails = {
-      backupId,
-      timestamp: new Date().toISOString(),
-      success: true,
-      restoredBy
-    };
-
-    logger.info(`Database restore completed successfully from backup ${backupId}`);
-
-    // Save restore record to database
+    await fs.access(backupPath);
+    
+    const dbConfig = sequelize.config;
+    const dbName = dbConfig.database;
+    const dbHost = dbConfig.host;
+    const dbPort = dbConfig.port;
+    const dbUser = dbConfig.username;
+    const dbPassword = dbConfig.password;
+    
+    logger.info(`Restoring database from backup: ${backup.filename}`);
+    
+    // Use environment variables for password to avoid it appearing in process list
+    process.env.PGPASSWORD = dbPassword;
+    
+    // First, disconnect all existing connections except ours
     await sequelize.query(`
-      INSERT INTO restore_history
-      (backup_id, restored_by, restored_at, status)
-      VALUES
-      (:backup_id, :restored_by, :restored_at, 'successful')
-    `, {
-      replacements: {
-        backup_id: backupId,
-        restored_by: restoredBy,
-        restored_at: new Date()
-      },
-      type: sequelize.QueryTypes.INSERT
-    }).catch(error => {
-      // If table doesn't exist yet, just log it
-      logger.warn(`Failed to record restore history: ${error.message}`);
-    });
-
-    return restoreDetails;
-  } catch (error) {
-    logger.error(`Restore failed: ${error.message}`, { error });
+      SELECT pg_terminate_backend(pg_stat_activity.pid)
+      FROM pg_stat_activity
+      WHERE pg_stat_activity.datname = '${dbName}'
+      AND pid <> pg_backend_pid()
+    `);
     
-    // Log failed restore attempt
-    try {
-      await sequelize.query(`
-        INSERT INTO restore_history
-        (backup_id, restored_by, restored_at, status, error_message)
-        VALUES
-        (:backup_id, :restored_by, :restored_at, 'failed', :error_message)
-      `, {
-        replacements: {
-          backup_id: options.backupId || 'unknown',
-          restored_by: options.restoredBy || 'system',
-          restored_at: new Date(),
-          error_message: error.message
-        },
-        type: sequelize.QueryTypes.INSERT
-      }).catch(() => {
-        // Ignore errors if table doesn't exist
-      });
-    } catch (logError) {
-      logger.warn(`Failed to log restore failure: ${logError.message}`);
+    // Drop and recreate database to ensure clean state
+    await sequelize.query(`DROP DATABASE IF EXISTS ${dbName}_temp`);
+    await sequelize.query(`CREATE DATABASE ${dbName}_temp`);
+    
+    // Restore into temporary database first to validate backup integrity
+    const restoreCommand = `psql -h ${dbHost} -p ${dbPort} -U ${dbUser} -d ${dbName}_temp -f "${backupPath}"`;
+    
+    const { stderr } = await execPromise(restoreCommand);
+    
+    // Log any warnings
+    if (stderr) {
+      logger.warn(`psql restore warnings: ${stderr}`);
     }
     
-    throw new Error(`Restore operation failed: ${error.message}`);
+    // Swap the databases
+    await sequelize.query(`DROP DATABASE IF EXISTS ${dbName}_old`);
+    
+    // Disconnect all users from main database
+    await sequelize.query(`
+      SELECT pg_terminate_backend(pg_stat_activity.pid)
+      FROM pg_stat_activity
+      WHERE pg_stat_activity.datname = '${dbName}'
+      AND pid <> pg_backend_pid()
+    `);
+    
+    await sequelize.query(`ALTER DATABASE ${dbName} RENAME TO ${dbName}_old`);
+    await sequelize.query(`ALTER DATABASE ${dbName}_temp RENAME TO ${dbName}`);
+    
+    // Update backup registry
+    const restoreInfo = {
+      backupId,
+      restoredBy,
+      restoredAt: new Date().toISOString(),
+      successful: true
+    };
+    
+    // Add restore information to the backup entry
+    const backupIndex = registry.backups.findIndex(b => b.id === backupId);
+    registry.backups[backupIndex].lastRestored = restoreInfo;
+    
+    await writeRegistry(registry);
+    
+    logger.info(`Database restored successfully from backup: ${backup.filename}`);
+    
+    return {
+      backup,
+      restore: restoreInfo
+    };
+  } catch (error) {
+    logger.error(`Database restore failed: ${error.message}`);
+    throw new Error(`Failed to restore database: ${error.message}`);
+  } finally {
+    // Clear environment variable
+    delete process.env.PGPASSWORD;
   }
 };
 
 /**
- * Get list of available backups
- * @param {Object} options - Query options
- * @param {Number} options.limit - Maximum number of backups to return
- * @param {Number} options.offset - Number of backups to skip
- * @returns {Promise<Array>} List of backups
+ * Get list of available backups with pagination
+ * @param {Object} options - List options
+ * @param {number} options.limit - Number of backups to return
+ * @param {number} options.offset - Number of backups to skip
+ * @returns {Object} Paginated backups with total count
  */
-const getBackups = async (options = {}) => {
-  try {
-    const { limit = 20, offset = 0 } = options;
-    
-    // Try to get backups from database
-    try {
-      const result = await sequelize.query(`
-        SELECT * FROM backup_history
-        ORDER BY created_at DESC
-        LIMIT :limit OFFSET :offset
-      `, {
-        replacements: { limit, offset },
-        type: sequelize.QueryTypes.SELECT
-      });
-      
-      if (result && result.length > 0) {
-        return result;
-      }
-    } catch (error) {
-      // If table doesn't exist, fallback to file system
-      logger.warn(`Failed to query backup history: ${error.message}`);
-    }
-    
-    // Fallback to file system if database table doesn't exist
-    const files = fs.readdirSync(BACKUP_DIR).filter(file => file.startsWith('backup-') && file.endsWith('.sql.gz'));
-    
-    // Sort by modification time (newest first)
-    files.sort((a, b) => {
-      const statA = fs.statSync(path.join(BACKUP_DIR, a));
-      const statB = fs.statSync(path.join(BACKUP_DIR, b));
-      return statB.mtime.getTime() - statA.mtime.getTime();
-    });
-    
-    // Apply limit and offset
-    const paginatedFiles = files.slice(offset, offset + limit);
-    
-    // Map files to backup objects
-    return paginatedFiles.map(file => {
-      const stats = fs.statSync(path.join(BACKUP_DIR, file));
-      const fileSizeBytes = stats.size;
-      const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(2);
-      
-      // Extract backup ID from filename (format: backup-timestamp-id.sql.gz)
-      const parts = file.split('-');
-      const backupId = parts[parts.length - 1].replace('.sql.gz', '');
-      
-      return {
-        backup_id: backupId,
-        file_name: file,
-        file_path: path.join(BACKUP_DIR, file),
-        file_size_bytes: fileSizeBytes,
-        file_size_mb: `${fileSizeMB} MB`,
-        created_at: stats.mtime.toISOString(),
-        description: 'System backup',
-        created_by: 'system'
-      };
-    });
-  } catch (error) {
-    logger.error(`Failed to get backups: ${error.message}`, { error });
-    throw new Error(`Failed to retrieve backups: ${error.message}`);
-  }
+exports.getBackups = async ({ limit = 20, offset = 0 }) => {
+  const registry = await readRegistry();
+  
+  // Sort backups by creation date (newest first) and apply pagination
+  const sortedBackups = registry.backups
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  
+  const paginatedBackups = sortedBackups.slice(offset, offset + limit);
+  
+  // Return with pagination metadata
+  return {
+    backups: paginatedBackups,
+    total: registry.backups.length,
+    limit,
+    offset
+  };
 };
 
 /**
  * Delete a backup
- * @param {String} backupId - Backup ID to delete
- * @returns {Promise<Boolean>} Success status
+ * @param {string} backupId - ID of backup to delete
+ * @returns {boolean} Success status
  */
-const deleteBackup = async (backupId) => {
+exports.deleteBackup = async (backupId) => {
+  const registry = await readRegistry();
+  const backup = registry.backups.find(b => b.id === backupId);
+  
+  if (!backup) {
+    throw new Error(`Backup with ID ${backupId} not found`);
+  }
+  
   try {
-    if (!backupId) {
-      throw new Error('Backup ID is required');
-    }
+    // Delete the actual backup file
+    await fs.unlink(backup.path);
     
-    // Find backup record
-    let backupRecord;
+    // Update registry
+    registry.backups = registry.backups.filter(b => b.id !== backupId);
+    await writeRegistry(registry);
     
-    try {
-      // Try to get record from database
-      const result = await sequelize.query(`
-        SELECT * FROM backup_history
-        WHERE backup_id = :backup_id
-        LIMIT 1
-      `, {
-        replacements: { backup_id: backupId },
-        type: sequelize.QueryTypes.SELECT
-      });
-      
-      if (result && result.length > 0) {
-        backupRecord = result[0];
-      }
-    } catch (error) {
-      // If table doesn't exist, we'll try to find file manually
-      logger.warn(`Failed to query backup history: ${error.message}`);
-    }
-    
-    // If record not found, try to find file manually
-    if (!backupRecord) {
-      // Find backup file by ID in filename
-      const files = fs.readdirSync(BACKUP_DIR);
-      const backupFile = files.find(file => file.includes(backupId));
-      
-      if (!backupFile) {
-        throw new Error(`Backup with ID ${backupId} not found`);
-      }
-      
-      backupRecord = {
-        file_path: path.join(BACKUP_DIR, backupFile),
-        file_name: backupFile
-      };
-    }
-    
-    // Check if backup file exists
-    if (fs.existsSync(backupRecord.file_path)) {
-      // Delete the backup file
-      fs.unlinkSync(backupRecord.file_path);
-    }
-    
-    // Delete from database if record exists
-    try {
-      await sequelize.query(`
-        DELETE FROM backup_history
-        WHERE backup_id = :backup_id
-      `, {
-        replacements: { backup_id: backupId },
-        type: sequelize.QueryTypes.DELETE
-      });
-    } catch (error) {
-      // Ignore if table doesn't exist
-      logger.debug(`Failed to delete from backup history: ${error.message}`);
-    }
-    
-    logger.info(`Backup deleted: ${backupRecord.file_name}`);
+    logger.info(`Backup deleted: ${backup.filename}`);
     
     return true;
   } catch (error) {
-    logger.error(`Failed to delete backup: ${error.message}`, { error });
+    logger.error(`Failed to delete backup: ${error.message}`);
     throw new Error(`Failed to delete backup: ${error.message}`);
   }
 };
 
-module.exports = {
-  createBackup,
-  restoreFromBackup,
-  getBackups,
-  deleteBackup
+/**
+ * Schedule a backup
+ * @param {Object} options - Schedule options
+ * @param {string} options.cronExpression - Cron expression for scheduling
+ * @param {string} options.description - Backup description
+ * @param {number} options.userId - ID of user scheduling the backup
+ * @param {number} options.retentionCount - Number of backups to retain
+ * @returns {Object} Schedule details
+ */
+exports.scheduleBackup = async ({ cronExpression, description, userId, retentionCount = 5 }) => {
+  // This implementation stores schedule in the file registry
+  // A production system would use a proper job scheduler like node-cron or a dedicated task queue
+  
+  // Read current registry
+  const registry = await readRegistry();
+  
+  // Initialize schedules array if it doesn't exist
+  if (!registry.schedules) {
+    registry.schedules = [];
+  }
+  
+  // Create schedule entry
+  const scheduleId = uuidv4();
+  const schedule = {
+    id: scheduleId,
+    cronExpression,
+    description,
+    createdBy: userId,
+    createdAt: new Date().toISOString(),
+    retentionCount,
+    isActive: true
+  };
+  
+  // Add to registry
+  registry.schedules.push(schedule);
+  await writeRegistry(registry);
+  
+  logger.info(`Backup schedule created: ${description}`);
+  
+  // In a real implementation, we would register this with a scheduler
+  // For this example, we just store the configuration
+  
+  return schedule;
+};
+
+/**
+ * Get list of backup schedules
+ * @returns {Array} List of backup schedules
+ */
+exports.getBackupSchedules = async () => {
+  const registry = await readRegistry();
+  return registry.schedules || [];
+};
+
+/**
+ * Verify a backup is valid
+ * @param {string} backupId - ID of backup to verify
+ * @returns {Object} Verification result
+ */
+exports.verifyBackup = async (backupId) => {
+  const registry = await readRegistry();
+  const backup = registry.backups.find(b => b.id === backupId);
+  
+  if (!backup) {
+    throw new Error(`Backup with ID ${backupId} not found`);
+  }
+  
+  try {
+    // Check if backup file exists
+    await fs.access(backup.path);
+    
+    // Verify file integrity by checking if it's a valid PostgreSQL dump
+    // This is a simplified check - it just ensures the file starts with PostgreSQL dump header
+    const fileHeader = await readFileHeader(backup.path, 100);
+    const isValidDump = fileHeader.includes('PostgreSQL database dump');
+    
+    const verificationResult = {
+      id: backupId,
+      filename: backup.filename,
+      verifiedAt: new Date().toISOString(),
+      isValid: isValidDump,
+      message: isValidDump ? 'Backup file is valid' : 'Backup file format is invalid'
+    };
+    
+    // Update registry with verification result
+    const backupIndex = registry.backups.findIndex(b => b.id === backupId);
+    registry.backups[backupIndex].lastVerified = verificationResult;
+    
+    await writeRegistry(registry);
+    
+    return verificationResult;
+  } catch (error) {
+    logger.error(`Backup verification failed: ${error.message}`);
+    
+    // Record the failed verification
+    const verificationResult = {
+      id: backupId,
+      filename: backup.filename,
+      verifiedAt: new Date().toISOString(),
+      isValid: false,
+      message: `Verification failed: ${error.message}`
+    };
+    
+    // Update registry with verification result
+    const backupIndex = registry.backups.findIndex(b => b.id === backupId);
+    registry.backups[backupIndex].lastVerified = verificationResult;
+    
+    await writeRegistry(registry);
+    
+    return verificationResult;
+  }
+};
+
+/**
+ * Read the beginning of a file
+ * @param {string} filePath - Path to file
+ * @param {number} bytes - Number of bytes to read
+ * @returns {string} File header
+ */
+const readFileHeader = async (filePath, bytes) => {
+  const fileHandle = await fs.open(filePath, 'r');
+  const buffer = Buffer.alloc(bytes);
+  
+  try {
+    await fileHandle.read(buffer, 0, bytes, 0);
+    return buffer.toString();
+  } finally {
+    await fileHandle.close();
+  }
+};
+
+/**
+ * Format bytes to human-readable format
+ * @param {number} bytes - Bytes to format
+ * @returns {string} Formatted string
+ */
+const formatBytes = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }; 

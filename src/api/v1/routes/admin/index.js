@@ -1,29 +1,46 @@
+/**
+ * Admin routes index
+ */
 const express = require('express');
 const router = express.Router();
-
-// Import admin route modules
-const projectRoutes = require('../../../../modules/projects/routes/admin');
-const blogRoutes = require('../../../../modules/blog/routes/admin');
-const contactRoutes = require('../../../../modules/contact/routes/admin');
-const skillRoutes = require('./skills');
-const experienceRoutes = require('./experience');
-const educationRoutes = require('./education');
-const settingsRoutes = require('./settings');
-const userRoutes = require('./users');
+const auth = require('../../../../shared/middleware/auth.middleware');
 const systemModule = require('../../../../modules/system');
-// Import other admin route modules as needed
+
+// All admin routes require authentication
+router.use(auth.requireAuth);
+
+// All admin routes require admin role
+router.use(auth.requireRole('admin'));
+
+// Import admin routes from modules
+const { adminRoutes: blogAdminRoutes } = require('../../../../modules/blog');
+const { adminRoutes: projectAdminRoutes } = require('../../../../modules/projects');
+const { adminRoutes: userAdminRoutes } = require('../../../../modules/users');
+const { adminRoutes: skillsAdminRoutes } = require('../../../../modules/skills');
+const { adminRoutes: experienceAdminRoutes } = require('../../../../modules/experience');
+const { adminRoutes: educationAdminRoutes } = require('../../../../modules/education');
+const { adminRoutes: testimonialAdminRoutes } = require('../../../../modules/testimonials');
+const { adminRoutes: settingsAdminRoutes } = require('../../../../modules/settings');
+const { adminRoutes: apiKeyAdminRoutes } = require('../../../../modules/security');
 
 // Register admin routes
-router.use('/projects', projectRoutes);
-router.use('/blog', blogRoutes);
-router.use('/contact', contactRoutes);
-router.use('/skills', skillRoutes);
-router.use('/experience', experienceRoutes);
-router.use('/education', educationRoutes);
-router.use('/settings', settingsRoutes);
-router.use('/users', userRoutes);
-router.use('/system/backup', systemModule.backupRoutes);
-router.use('/system/audit', systemModule.auditRoutes);
+router.use('/blog', blogAdminRoutes);
+router.use('/projects', projectAdminRoutes);
+router.use('/users', userAdminRoutes);
+router.use('/skills', skillsAdminRoutes);
+router.use('/experience', experienceAdminRoutes);
+router.use('/education', educationAdminRoutes);
+router.use('/testimonials', testimonialAdminRoutes);
+router.use('/settings', settingsAdminRoutes);
+router.use('/api-keys', apiKeyAdminRoutes);
+
+// Register system routes
+router.use('/system/backup', systemModule.routes.backupRoutes);
+router.use('/system/audit', systemModule.routes.auditRoutes);
+router.use('/system/config', systemModule.routes.configRoutes);
+router.use('/system/cache', systemModule.routes.cacheRoutes);
+router.use('/system/logs', systemModule.routes.logRoutes);
+router.use('/system/monitoring', systemModule.routes.monitoringRoutes);
 
 // Admin health check
 router.get('/health', (req, res) => {

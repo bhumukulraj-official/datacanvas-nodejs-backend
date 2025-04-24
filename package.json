@@ -41,7 +41,10 @@
     "uuid": "^9.0.0",
     "winston": "^3.8.2",
     "ws": "^8.13.0",
-    "web-push": "^3.6.6"
+    "web-push": "^3.6.6",
+    "async-lock": "^1.4.0",
+    "node-cache": "^5.1.2",
+    "prom-client": "^14.2.0"
   },
   "devDependencies": {
     "eslint": "^8.39.0",

@@ -23,6 +23,8 @@ const { testimonialRoutes } = require('../../../modules/testimonials');
 const { settingsRoutes } = require('../../../modules/settings');
 const { searchRoutes } = require('../../../modules/search');
 const { apiKeyRoutes } = require('../../../modules/security');
+// Import system health service
+const healthService = require('../../../modules/system/services/health.service');
 // Import other route modules as needed
 
 // API version information
@@ -104,14 +106,28 @@ router.get('/version', (req, res) => {
   });
 });
 
-// API Health check
-router.get('/health', (req, res) => {
+// API Health check - Basic health endpoint
+router.get('/health', async (req, res) => {
+  const basicHealth = await healthService.getBasicHealth();
+  
   res.status(200).json({
     success: true,
     data: {
-      status: 'healthy',
-      version: API_VERSION,
-      timestamp: new Date().toISOString()
+      ...basicHealth,
+      version: API_VERSION
+    }
+  });
+});
+
+// API Detailed Health check - Detailed health information
+router.get('/health/detailed', async (req, res) => {
+  const detailedHealth = await healthService.getDetailedHealth();
+  
+  res.status(200).json({
+    success: true,
+    data: {
+      ...detailedHealth,
+      version: API_VERSION
     }
   });
 });
