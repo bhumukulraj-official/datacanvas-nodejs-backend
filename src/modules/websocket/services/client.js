@@ -7,12 +7,15 @@
  * - Connection tracking
  * - Channel subscription management
  * - Secure message handling
+ * - Offline message delivery
+ * - Message acknowledgment support
  */
 const WebSocket = require('ws');
 const { v4: uuidv4 } = require('uuid');
 const { WebSocketError } = require('../../../shared/errors');
 const logger = require('../../../shared/utils/logger');
 const connectionService = require('./connection.service');
+const messageService = require('./message.service');
 
 /**
  * WebSocket close codes (RFC 6455)
@@ -60,12 +63,24 @@ class WebSocketClient {
     this.metadata = options.metadata || {};
     this.ip = options.ip || null;
     this.userAgent = options.userAgent || null;
+    this.pendingMessages = new Map(); // Track messages waiting for acknowledgment
+    this.pendingAcks = new Set(); // Set of message IDs waiting for acknowledgment
+    this.capabilityFlags = options.capabilities || { 
+      supportsAcks: false,
+      supportsOfflineMessages: false, 
+      supportsBinary: true 
+    };
     
     // Set up event handlers
     this._setupEventHandlers();
     
     // Track connection in database
     this._trackConnection();
+    
+    // Check for pending messages if client supports it
+    if (this.capabilityFlags.supportsOfflineMessages) {
+      this._deliverOfflineMessages();
+    }
   }
   
   /**
@@ -89,7 +104,10 @@ class WebSocketClient {
         connectionId: this.connectionId,
         userId: this.userId,
         status: 'active',
-        metadata: this.metadata,
+        metadata: {
+          ...this.metadata,
+          capabilities: this.capabilityFlags
+        },
         userAgent: this.userAgent,
         ipAddress: this.ip
       });
@@ -103,6 +121,101 @@ class WebSocketClient {
         userId: this.userId,
         connectionId: this.connectionId
       });
+    }
+  }
+  
+  /**
+   * Deliver any pending offline messages
+   * @private
+   */
+  async _deliverOfflineMessages() {
+    try {
+      // Get pending messages
+      const pendingMessages = await messageService.getPendingMessages(this.userId, {
+        limit: 50, // Reasonable batch size
+        onlyHighPriority: false // Include all messages
+      });
+      
+      if (pendingMessages.length === 0) {
+        return;
+      }
+      
+      logger.info(`Delivering ${pendingMessages.length} offline messages to user ${this.userId}`);
+      
+      // Send messages with a small delay between them to avoid overwhelming the client
+      const messageIds = [];
+      
+      for (let i = 0; i < pendingMessages.length; i++) {
+        const message = pendingMessages[i];
+        
+        // Add slight delay to avoid overwhelming client (2ms * message index)
+        await new Promise(resolve => setTimeout(resolve, 2 * i));
+        
+        // Skip if client disconnected during delivery
+        if (this.ws.readyState !== WebSocket.OPEN) {
+          break;
+        }
+        
+        // Send the message
+        const sent = await this._sendOfflineMessage(message);
+        
+        if (sent) {
+          messageIds.push(message.id);
+          
+          // Track as pending acknowledgment if client supports it
+          if (this.capabilityFlags.supportsAcks) {
+            this.pendingAcks.add(message.id);
+          }
+        }
+      }
+      
+      // If client doesn't support acknowledgments, mark as delivered immediately
+      if (!this.capabilityFlags.supportsAcks && messageIds.length > 0) {
+        await messageService.markMessagesDelivered(messageIds);
+      }
+    } catch (error) {
+      logger.error(`Failed to deliver offline messages: ${error.message}`, {
+        userId: this.userId,
+        connectionId: this.connectionId
+      });
+    }
+  }
+  
+  /**
+   * Send offline message to client
+   * @param {Object} message - Message to send
+   * @returns {Promise<Boolean>} Success status
+   * @private
+   */
+  async _sendOfflineMessage(message) {
+    try {
+      // Prepare the message with metadata for the client
+      const clientMessage = {
+        id: message.id,
+        type: message.type,
+        channel: message.channel,
+        data: message.data,
+        timestamp: message.created_at,
+        offline: true,
+        requiresAck: this.capabilityFlags.supportsAcks
+      };
+      
+      return new Promise(resolve => {
+        this.ws.send(JSON.stringify(clientMessage), error => {
+          if (error) {
+            logger.error(`Failed to send offline message: ${error.message}`, {
+              messageId: message.id,
+              userId: this.userId
+            });
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        });
+      });
+    } catch (error) {
+      logger.error(`Error preparing offline message: ${error.message}`);
+      return false;
     }
   }
   
@@ -140,6 +253,14 @@ class WebSocketClient {
           await this._handleUnsubscribe(message);
           break;
           
+        case 'ack':
+          await this._handleAcknowledgment(message);
+          break;
+          
+        case 'capabilities':
+          await this._handleCapabilities(message);
+          break;
+          
         default:
           // Unknown message type
           logger.warn(`Unknown message type: ${message.type}`, {
@@ -155,6 +276,84 @@ class WebSocketClient {
       });
       
       this.sendError(`Error processing message: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Handle message acknowledgment
+   * @param {Object} message - Acknowledgment message
+   * @private
+   */
+  async _handleAcknowledgment(message) {
+    try {
+      if (!message.id) {
+        return this.sendError('Message ID is required for acknowledgment');
+      }
+      
+      // Process acknowledgment
+      const success = await messageService.acknowledgeMessage(
+        message.id,
+        this.userId,
+        message.metadata || {}
+      );
+      
+      if (success) {
+        // Remove from pending set
+        this.pendingAcks.delete(message.id);
+        
+        // Send confirmation if client expects it
+        if (message.requiresConfirmation) {
+          this.send({
+            type: 'ack_confirmed',
+            id: message.id,
+            timestamp: new Date().toISOString()
+          });
+        }
+      } else {
+        logger.warn(`Failed to process acknowledgment for message: ${message.id}`, {
+          userId: this.userId
+        });
+      }
+    } catch (error) {
+      logger.error(`Error handling acknowledgment: ${error.message}`);
+    }
+  }
+  
+  /**
+   * Handle client capabilities negotiation
+   * @param {Object} message - Capabilities message
+   * @private
+   */
+  async _handleCapabilities(message) {
+    try {
+      // Update capability flags
+      this.capabilityFlags = {
+        ...this.capabilityFlags,
+        ...(message.capabilities || {})
+      };
+      
+      // Update connection record with new capabilities
+      await connectionService.updateConnection(this.connectionId, {
+        metadata: {
+          ...this.metadata,
+          capabilities: this.capabilityFlags
+        }
+      });
+      
+      // Confirm capabilities
+      this.send({
+        type: 'capabilities_confirmed',
+        capabilities: this.capabilityFlags,
+        timestamp: new Date().toISOString()
+      });
+      
+      // If client just enabled offline messages, deliver them
+      if (message.capabilities?.supportsOfflineMessages && !this.deliveredOfflineMessages) {
+        this.deliveredOfflineMessages = true;
+        await this._deliverOfflineMessages();
+      }
+    } catch (error) {
+      logger.error(`Error handling capabilities: ${error.message}`);
     }
   }
   
@@ -342,31 +541,87 @@ class WebSocketClient {
   }
   
   /**
-   * Send message to client
+   * Send message with delivery tracking
    * @param {Object} message - Message to send
+   * @param {Object} options - Send options
    * @returns {Promise<Boolean>} Success status
    */
-  send(message) {
-    return new Promise((resolve) => {
+  async send(message, options = {}) {
+    try {
       if (this.ws.readyState !== WebSocket.OPEN) {
-        return resolve(false);
+        return false;
       }
       
-      const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
+      // Add message ID and timestamp if not present
+      if (!message.id) {
+        message.id = uuidv4();
+      }
       
-      this.ws.send(messageStr, (error) => {
-        if (error) {
-          logger.error(`Failed to send message: ${error.message}`, {
-            connectionId: this.connectionId,
-            userId: this.userId
-          });
-          resolve(false);
-        } else {
-          this.lastActivityAt = new Date();
-          resolve(true);
-        }
+      if (!message.timestamp) {
+        message.timestamp = new Date().toISOString();
+      }
+      
+      // Add acknowledgment requirement if client supports it
+      if (this.capabilityFlags.supportsAcks && options.requireAck !== false) {
+        message.requiresAck = true;
+        this.pendingAcks.add(message.id);
+        
+        // Set acknowledgment timeout
+        const timeoutMs = options.ackTimeoutMs || 30000; // Default 30s
+        setTimeout(() => {
+          if (this.pendingAcks.has(message.id)) {
+            this.pendingAcks.delete(message.id);
+            logger.warn(`Acknowledgment timeout for message: ${message.id}`, {
+              userId: this.userId
+            });
+            
+            // Record as failed delivery if tracking is requested
+            if (options.trackDelivery) {
+              messageService.updateMessageStatus(message.id, 'failed', 'Acknowledgment timeout');
+            }
+          }
+        }, timeoutMs);
+      }
+      
+      // Track delivery in database if requested
+      if (options.trackDelivery) {
+        await messageService.createMessageRecord({
+          type: message.type,
+          userId: this.userId,
+          channel: options.channel || 'direct',
+          messageId: message.id,
+          data: message
+        });
+      }
+      
+      return new Promise(resolve => {
+        this.ws.send(JSON.stringify(message), error => {
+          if (error) {
+            logger.error(`Failed to send message: ${error.message}`, {
+              messageId: message.id,
+              userId: this.userId
+            });
+            
+            // Update delivery status if tracking
+            if (options.trackDelivery) {
+              messageService.updateMessageStatus(message.id, 'failed', error.message);
+            }
+            
+            resolve(false);
+          } else {
+            // Update delivery status if not requiring acknowledgment and tracking
+            if (options.trackDelivery && !message.requiresAck) {
+              messageService.updateMessageStatus(message.id, 'delivered');
+            }
+            
+            resolve(true);
+          }
+        });
       });
-    });
+    } catch (error) {
+      logger.error(`Send message error: ${error.message}`);
+      return false;
+    }
   }
   
   /**
@@ -375,15 +630,19 @@ class WebSocketClient {
    * @param {Number} code - Error code
    * @returns {Promise<Boolean>} Success status
    */
-  sendError(message, code) {
-    return this.send({
-      type: 'error',
-      error: {
-        message,
-        code
-      },
-      timestamp: new Date().toISOString()
-    });
+  async sendError(message, code) {
+    try {
+      return this.send({
+        type: 'error',
+        error: {
+          message,
+          code: code || 'ERROR'
+        }
+      });
+    } catch (error) {
+      logger.error(`Failed to send error message: ${error.message}`);
+      return false;
+    }
   }
   
   /**

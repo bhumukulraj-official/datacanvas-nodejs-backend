@@ -9,10 +9,12 @@
  * - Proper connection close handling with status codes
  * - Connection tracking and monitoring
  * - Channel-based messaging for secure message routing
+ * - Message compression for efficient data transfer
  */
 const WebSocket = require('ws');
 const http = require('http');
 const url = require('url');
+const zlib = require('zlib');
 const { WebSocketError } = require('../errors');
 const logger = require('../utils/logger');
 const config = require('../config');
@@ -56,13 +58,32 @@ const setupWebSocketServer = (server, options = {}) => {
     rateLimiter,
     path = '/api/v1/ws',
     maxPayloadSize = 1024 * 1024, // 1MB default
-    heartbeatIntervalMs = 30000 // 30 seconds default
+    heartbeatIntervalMs = 30000, // 30 seconds default
+    perMessageDeflate = true // Enable compression by default
   } = options;
   
-  // Create WS server with security options
+  // Create WS server with security options and compression
   const wss = new WebSocket.Server({ 
     noServer: true,
-    maxPayload: maxPayloadSize
+    maxPayload: maxPayloadSize,
+    perMessageDeflate: perMessageDeflate ? {
+      zlibDeflateOptions: {
+        // See zlib defaults: https://nodejs.org/api/zlib.html
+        chunkSize: 1024,
+        memLevel: 7,
+        level: 3
+      },
+      zlibInflateOptions: {
+        chunkSize: 10 * 1024
+      },
+      // Other options
+      serverNoContextTakeover: true, // Disable context takeover for the server
+      clientNoContextTakeover: true, // Disable context takeover for the client
+      serverMaxWindowBits: 10, // Reduce server memory allocation
+      // Below options specified by the WebSocket protocol
+      concurrencyLimit: 10, // Limits zlib concurrency for performance
+      threshold: 1024 // Size below which messages should not be compressed
+    } : false
   });
   
   // Track subscribed channels for each connection
@@ -101,7 +122,41 @@ const setupWebSocketServer = (server, options = {}) => {
   };
   
   /**
-   * Broadcast message to all clients subscribed to specific channel
+   * Compress message if it's large enough
+   * @param {Object|String} message - Message to compress
+   * @returns {Promise<Buffer|String>} Compressed message or original if small
+   */
+  wss.compressMessage = async (message) => {
+    try {
+      if (!perMessageDeflate) {
+        return typeof message === 'string' ? message : JSON.stringify(message);
+      }
+      
+      const messageStr = typeof message === 'string' ? message : JSON.stringify(message);
+      
+      // Don't compress small messages
+      if (messageStr.length < 1024) {
+        return messageStr;
+      }
+      
+      return new Promise((resolve, reject) => {
+        zlib.deflate(messageStr, { level: 3 }, (err, buffer) => {
+          if (err) {
+            logger.warn(`Message compression failed: ${err.message}`);
+            resolve(messageStr); // Fallback to uncompressed
+          } else {
+            resolve(buffer);
+          }
+        });
+      });
+    } catch (error) {
+      logger.error(`Message compression error: ${error.message}`);
+      return typeof message === 'string' ? message : JSON.stringify(message);
+    }
+  };
+  
+  /**
+   * Broadcast message to all clients subscribed to specific channel with compression
    * @param {String} channel - Target channel
    * @param {Object} message - Message to broadcast
    * @param {Boolean} isPriority - Whether message is high priority
@@ -109,8 +164,13 @@ const setupWebSocketServer = (server, options = {}) => {
    */
   wss.broadcastToChannel = async (channel, message, isPriority = false) => {
     try {
-      const messageStr = JSON.stringify(message);
+      const messageData = await wss.compressMessage(message);
       let sentCount = 0;
+      
+      // Add compression flag if message was compressed
+      const isCompressed = Buffer.isBuffer(messageData);
+      
+      const sendPromises = [];
       
       wss.clients.forEach((client) => {
         if (
@@ -122,23 +182,37 @@ const setupWebSocketServer = (server, options = {}) => {
           // For high priority messages, attempt to send even if client appears busy
           if (isPriority || !client.isSendingMessage) {
             client.isSendingMessage = true;
-            client.send(messageStr, (err) => {
-              client.isSendingMessage = false;
-              if (err) {
-                logger.warn(`Failed to send message to client: ${err.message}`, {
-                  connectionId: client.connectionId,
-                  userId: client.userId,
-                  channel
-                });
-              } else {
-                sentCount++;
-              }
+            
+            // Set compression flag if client supports it
+            const options = isCompressed && client.supportsCompression ? 
+              { compress: true, binary: true } : undefined;
+            
+            const sendPromise = new Promise(resolve => {
+              client.send(messageData, options, (err) => {
+                client.isSendingMessage = false;
+                if (err) {
+                  logger.warn(`Failed to send message to client: ${err.message}`, {
+                    connectionId: client.connectionId,
+                    userId: client.userId,
+                    channel
+                  });
+                  resolve(false);
+                } else {
+                  sentCount++;
+                  resolve(true);
+                }
+              });
             });
+            
+            sendPromises.push(sendPromise);
           }
         }
       });
       
-      return true;
+      // Wait for all messages to be sent
+      await Promise.all(sendPromises);
+      
+      return sentCount > 0;
     } catch (error) {
       logger.error(`Broadcasting to channel ${channel} failed: ${error.message}`);
       return false;
@@ -277,6 +351,9 @@ const setupWebSocketServer = (server, options = {}) => {
     // Parse query parameters to get token
     const { query } = url.parse(request.url, true);
     
+    const supportsCompression = request.headers['sec-websocket-extensions'] && 
+      request.headers['sec-websocket-extensions'].includes('permessage-deflate');
+      
     try {
       // Validate token
       const user = await validateToken(query.token);
@@ -294,6 +371,7 @@ const setupWebSocketServer = (server, options = {}) => {
         ws.isSendingMessage = false;
         ws.connectedAt = new Date();
         ws.lastActivityAt = new Date();
+        ws.supportsCompression = supportsCompression;
         
         // Create client metadata
         const metadata = {

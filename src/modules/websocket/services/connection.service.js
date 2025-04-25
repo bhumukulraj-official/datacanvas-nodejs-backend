@@ -1,360 +1,319 @@
-const WebSocket = require('ws');
-const jwt = require('jsonwebtoken');
+/**
+ * WebSocket Connection Service
+ * 
+ * Manages and tracks active WebSocket connections with features for:
+ * - Connection registration and tracking
+ * - User-to-connection mapping
+ * - Connection metadata and statistics
+ */
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../../../shared/utils/logger');
-const WebSocketConnection = require('../models/WebSocketConnection');
-const config = require('../../../shared/config');
 
-class ConnectionService {
-  constructor() {
-    this.activeConnections = new Map();
-    this.reconnectAttempts = new Map();
-  }
+// In-memory storage for connections
+const connections = new Map();
+const userConnections = new Map();
 
-  /**
-   * Authenticate WebSocket connection using JWT token
-   * @param {String} token - JWT token
-   * @returns {Object} Decoded user information
-   */
-  async authenticateConnection(token) {
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-      if (!decoded || !decoded.sub) {
-        throw new Error('Invalid token');
-      }
-      return decoded;
-    } catch (error) {
-      logger.error('WebSocket authentication failed:', error);
-      throw new Error('Authentication failed');
+/**
+ * Register a new WebSocket connection
+ * 
+ * @param {string} connectionId - Connection identifier
+ * @param {string} userId - User identifier
+ * @param {Object} metadata - Connection metadata
+ * @returns {boolean} Success status
+ */
+function registerConnection(connectionId, userId, metadata = {}) {
+  try {
+    if (!connectionId) {
+      throw new Error('Connection ID is required');
     }
-  }
-
-  /**
-   * Track new WebSocket connection
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {Object} user - Authenticated user
-   * @param {Object} clientInfo - Client information
-   * @returns {String} Connection ID
-   */
-  async trackConnection(ws, user, clientInfo) {
-    const connectionId = uuidv4();
     
-    // Store connection details
-    const connection = await WebSocketConnection.create({
-      connection_id: connectionId,
-      user_id: user.sub,
-      client_ip: clientInfo.ip,
-      user_agent: clientInfo.userAgent,
-      connected_at: new Date(),
-      is_active: true
-    });
-
-    // Add to active connections map
-    this.activeConnections.set(connectionId, {
-      ws,
-      userId: user.sub,
-      connectionId,
+    // Create connection object
+    const connection = {
+      id: connectionId,
+      userId: userId || null,
+      isAuthenticated: !!userId,
       connectedAt: new Date(),
-      clientInfo,
-      isAlive: true
+      lastActivityAt: new Date(),
+      metadata: {
+        ip: metadata.ip || null,
+        userAgent: metadata.userAgent || null,
+        sessionId: metadata.sessionId || null,
+        ...metadata
+      }
+    };
+    
+    // Store connection
+    connections.set(connectionId, connection);
+    
+    // If user is authenticated, add to user connections
+    if (userId) {
+      if (!userConnections.has(userId)) {
+        userConnections.set(userId, new Map());
+      }
+      userConnections.get(userId).set(connectionId, connection);
+    }
+    
+    logger.debug(`Registered WebSocket connection: ${connectionId}`, {
+      userId,
+      metadata
     });
-
-    // Reset reconnection attempts on successful connection
-    this.reconnectAttempts.delete(user.sub);
-
-    return connectionId;
-  }
-
-  /**
-   * Handle connection close
-   * @param {String} connectionId - Connection ID
-   * @param {String} userId - User ID
-   */
-  async handleDisconnect(connectionId, userId) {
-    try {
-      // Update connection status in database
-      await WebSocketConnection.update(
-        { is_active: false, disconnected_at: new Date() },
-        { where: { connection_id: connectionId } }
-      );
-      
-      // Remove from active connections
-      this.activeConnections.delete(connectionId);
-      
-      logger.info(`WebSocket connection closed for user ${userId}`, {
-        userId,
-        connectionId
-      });
-    } catch (error) {
-      logger.error(`Error handling WebSocket disconnect: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get reconnection delay with exponential backoff
-   * @param {String} userId - User ID
-   * @returns {Number} Delay in milliseconds
-   */
-  getReconnectionDelay(userId) {
-    const attempts = this.reconnectAttempts.get(userId) || 0;
-    const baseDelay = 1000; // 1 second
-    const maxDelay = 30000; // 30 seconds
-    
-    // Calculate exponential backoff
-    const delay = Math.min(baseDelay * Math.pow(2, attempts), maxDelay);
-    
-    // Increment attempts counter
-    this.reconnectAttempts.set(userId, attempts + 1);
-    
-    return delay;
-  }
-
-  /**
-   * Get all active connections for a user
-   * @param {String} userId - User ID
-   * @returns {Array} Array of active connections
-   */
-  getUserConnections(userId) {
-    return Array.from(this.activeConnections.values())
-      .filter(conn => conn.userId === userId);
-  }
-
-  /**
-   * Check if connection is alive and update status
-   * @param {String} connectionId - Connection ID
-   * @returns {Boolean} Connection status
-   */
-  isConnectionAlive(connectionId) {
-    const connection = this.activeConnections.get(connectionId);
-    if (!connection) return false;
-    
-    if (!connection.isAlive) {
-      this.handleDisconnect(connectionId, connection.userId);
-      return false;
-    }
     
     return true;
-  }
-
-  /**
-   * Update connection alive status
-   * @param {String} connectionId - Connection ID
-   * @param {Boolean} status - Alive status
-   */
-  updateConnectionStatus(connectionId, status) {
-    const connection = this.activeConnections.get(connectionId);
-    if (connection) {
-      connection.isAlive = status;
-    }
-  }
-
-  /**
-   * Create a new WebSocket connection record
-   * @param {Object} data - Connection data
-   * @returns {Promise<Object>} Created connection
-   */
-  async createConnection(data) {
-    try {
-      const connection = await WebSocketConnection.create({
-        connection_id: data.connectionId,
-        user_id: data.userId,
-        status: data.status || 'active',
-        client_ip: data.ipAddress,
-        user_agent: data.userAgent,
-        connected_at: new Date(),
-        metadata: typeof data.metadata === 'string' ? data.metadata : JSON.stringify(data.metadata || {})
-      });
-      
-      logger.debug(`WebSocket connection created in database: ${data.connectionId}`, {
-        userId: data.userId
-      });
-      
-      return connection;
-    } catch (error) {
-      logger.error(`Failed to create connection record: ${error.message}`, {
-        connectionId: data.connectionId,
-        userId: data.userId,
-        error
-      });
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Update connection status
-   * @param {String} connectionId - Connection ID
-   * @param {Object} data - Updated data
-   * @returns {Promise<Boolean>} Success status
-   */
-  async updateConnection(connectionId, data) {
-    try {
-      const [updated] = await WebSocketConnection.update({
-        status: data.status,
-        disconnected_at: data.disconnectedAt,
-        disconnect_reason: data.disconnectReason,
-        disconnect_code: data.disconnectCode,
-        updated_at: new Date()
-      }, {
-        where: { connection_id: connectionId }
-      });
-      
-      logger.debug(`WebSocket connection updated: ${connectionId}`, {
-        status: data.status
-      });
-      
-      return updated > 0;
-    } catch (error) {
-      logger.error(`Failed to update connection: ${error.message}`, {
-        connectionId,
-        error
-      });
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Get connection details by ID
-   * @param {String} connectionId - Connection ID
-   * @returns {Promise<Object>} Connection details
-   */
-  async getConnectionById(connectionId) {
-    try {
-      const connection = await WebSocketConnection.findOne({
-        where: { connection_id: connectionId }
-      });
-      
-      return connection;
-    } catch (error) {
-      logger.error(`Failed to get connection: ${error.message}`, {
-        connectionId,
-        error
-      });
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Get all connections with pagination and filters
-   * @param {Number} page - Page number
-   * @param {Number} limit - Items per page
-   * @param {String} status - Optional status filter
-   * @returns {Promise<Object>} Paginated connections
-   */
-  async getAllConnections(page = 1, limit = 10, status = null) {
-    try {
-      const offset = (page - 1) * limit;
-      const whereClause = {};
-      
-      if (status) {
-        whereClause.status = status;
-      }
-      
-      const { count, rows } = await WebSocketConnection.findAndCountAll({
-        where: whereClause,
-        limit: limit,
-        offset: offset,
-        order: [['connected_at', 'DESC']]
-      });
-      
-      return {
-        connections: rows,
-        total: count,
-        page: page,
-        limit: limit,
-        totalPages: Math.ceil(count / limit)
-      };
-    } catch (error) {
-      logger.error(`Failed to get connections: ${error.message}`, { error });
-      throw error;
-    }
-  }
-  
-  /**
-   * Get user connections
-   * @param {String} userId - User ID
-   * @param {String} status - Optional status filter
-   * @returns {Promise<Array>} User connections
-   */
-  async getUserConnections(userId, status = null) {
-    try {
-      const whereClause = { user_id: userId };
-      
-      if (status) {
-        whereClause.status = status;
-      }
-      
-      const connections = await WebSocketConnection.findAll({
-        where: whereClause,
-        order: [['connected_at', 'DESC']]
-      });
-      
-      return connections;
-    } catch (error) {
-      logger.error(`Failed to get user connections: ${error.message}`, {
-        userId,
-        error
-      });
-      
-      throw error;
-    }
-  }
-  
-  /**
-   * Subscribe to channel
-   * @param {String} connectionId - Connection ID
-   * @param {String} channel - Channel name
-   * @returns {Promise<Boolean>} Success status
-   */
-  async subscribeToChannel(connectionId, channel) {
-    try {
-      // This implementation would typically update a channel subscriptions table
-      // For now, we'll just log it
-      logger.debug(`Subscription to channel: ${channel}`, {
-        connectionId,
-        channel
-      });
-      
-      return true;
-    } catch (error) {
-      logger.error(`Failed to subscribe to channel: ${error.message}`, {
-        connectionId,
-        channel,
-        error
-      });
-      
-      return false;
-    }
-  }
-  
-  /**
-   * Unsubscribe from channel
-   * @param {String} connectionId - Connection ID
-   * @param {String} channel - Channel name
-   * @returns {Promise<Boolean>} Success status
-   */
-  async unsubscribeFromChannel(connectionId, channel) {
-    try {
-      // This implementation would typically update a channel subscriptions table
-      // For now, we'll just log it
-      logger.debug(`Unsubscribed from channel: ${channel}`, {
-        connectionId,
-        channel
-      });
-      
-      return true;
-    } catch (error) {
-      logger.error(`Failed to unsubscribe from channel: ${error.message}`, {
-        connectionId,
-        channel,
-        error
-      });
-      
-      return false;
-    }
+  } catch (error) {
+    logger.error(`Failed to register connection: ${error.message}`, {
+      connectionId,
+      userId,
+      error
+    });
+    return false;
   }
 }
 
-module.exports = new ConnectionService(); 
+/**
+ * Update a connection with a WebSocket instance
+ * 
+ * @param {string} connectionId - Connection identifier
+ * @param {WebSocket} ws - WebSocket instance
+ * @returns {boolean} Success status
+ */
+function updateConnectionSocket(connectionId, ws) {
+  try {
+    if (!connectionId || !connections.has(connectionId)) {
+      return false;
+    }
+    
+    const connection = connections.get(connectionId);
+    connection.ws = ws;
+    connection.lastActivityAt = new Date();
+    
+    return true;
+  } catch (error) {
+    logger.error(`Failed to update connection socket: ${error.message}`, {
+      connectionId,
+      error
+    });
+    return false;
+  }
+}
+
+/**
+ * Update connection metadata
+ * 
+ * @param {string} connectionId - Connection identifier
+ * @param {Object} metadata - Connection metadata to update
+ * @returns {boolean} Success status
+ */
+function updateConnectionMetadata(connectionId, metadata = {}) {
+  try {
+    if (!connectionId || !connections.has(connectionId)) {
+      return false;
+    }
+    
+    const connection = connections.get(connectionId);
+    connection.metadata = {
+      ...connection.metadata,
+      ...metadata
+    };
+    connection.lastActivityAt = new Date();
+    
+    return true;
+  } catch (error) {
+    logger.error(`Failed to update connection metadata: ${error.message}`, {
+      connectionId,
+      error
+    });
+    return false;
+  }
+}
+
+/**
+ * Get connection by ID
+ * 
+ * @param {string} connectionId - Connection identifier
+ * @returns {Object|null} Connection object or null if not found
+ */
+function getConnection(connectionId) {
+  return connections.has(connectionId) ? connections.get(connectionId) : null;
+}
+
+/**
+ * Remove a connection
+ * 
+ * @param {string} connectionId - Connection identifier
+ * @returns {boolean} Success status
+ */
+function removeConnection(connectionId) {
+  try {
+    if (!connectionId || !connections.has(connectionId)) {
+      return false;
+    }
+    
+    const connection = connections.get(connectionId);
+    
+    // Remove from connections map
+    connections.delete(connectionId);
+    
+    // If there's a userId, remove from user connections as well
+    if (connection.userId && userConnections.has(connection.userId)) {
+      const userConnectionMap = userConnections.get(connection.userId);
+      userConnectionMap.delete(connectionId);
+      
+      // If no more connections for user, remove the map
+      if (userConnectionMap.size === 0) {
+        userConnections.delete(connection.userId);
+      }
+    }
+    
+    logger.debug(`Removed WebSocket connection: ${connectionId}`, {
+      userId: connection.userId
+    });
+    
+    return true;
+  } catch (error) {
+    logger.error(`Failed to remove connection: ${error.message}`, {
+      connectionId,
+      error
+    });
+    return false;
+  }
+}
+
+/**
+ * Get all connections for a user
+ * 
+ * @param {string} userId - User identifier
+ * @returns {Array} Array of connection objects
+ */
+function getUserConnections(userId) {
+  if (!userId || !userConnections.has(userId)) {
+    return [];
+  }
+  
+  return Array.from(userConnections.get(userId).values());
+}
+
+/**
+ * Count connections for a user
+ * 
+ * @param {string} userId - User identifier
+ * @returns {number} Number of connections
+ */
+function countUserConnections(userId) {
+  if (!userId || !userConnections.has(userId)) {
+    return 0;
+  }
+  
+  return userConnections.get(userId).size;
+}
+
+/**
+ * Check if a user has any active connections
+ * 
+ * @param {string} userId - User identifier
+ * @returns {boolean} True if user has active connections
+ */
+function isUserConnected(userId) {
+  return countUserConnections(userId) > 0;
+}
+
+/**
+ * Remove all connections for a user
+ * 
+ * @param {string} userId - User identifier
+ * @returns {number} Number of connections removed
+ */
+function removeUserConnections(userId) {
+  if (!userId || !userConnections.has(userId)) {
+    return 0;
+  }
+  
+  const userConnectionMap = userConnections.get(userId);
+  const connectionIds = Array.from(userConnectionMap.keys());
+  let removedCount = 0;
+  
+  // Remove each connection
+  for (const connectionId of connectionIds) {
+    // Only remove from main connections map, we'll remove from user map after
+    if (connections.has(connectionId)) {
+      connections.delete(connectionId);
+      removedCount++;
+    }
+  }
+  
+  // Remove user from user connections map
+  userConnections.delete(userId);
+  
+  logger.debug(`Removed all connections for user: ${userId}`, {
+    count: removedCount
+  });
+  
+  return removedCount;
+}
+
+/**
+ * Get connection statistics
+ * 
+ * @returns {Object} Connection statistics
+ */
+function getConnectionStats() {
+  // Count authenticated vs unauthenticated connections
+  let authenticatedCount = 0;
+  let unauthenticatedCount = 0;
+  
+  connections.forEach(conn => {
+    if (conn.isAuthenticated) {
+      authenticatedCount++;
+    } else {
+      unauthenticatedCount++;
+    }
+  });
+  
+  return {
+    total: connections.size,
+    authenticated: authenticatedCount,
+    unauthenticated: unauthenticatedCount,
+    userCount: userConnections.size,
+    timestamp: new Date()
+  };
+}
+
+/**
+ * Clean up inactive connections
+ * 
+ * @param {number} maxInactiveTime - Maximum inactive time in milliseconds
+ * @returns {number} Number of connections removed
+ */
+function cleanupInactiveConnections(maxInactiveTime = 3600000) { // Default: 1 hour
+  const now = new Date();
+  let removedCount = 0;
+  
+  connections.forEach((connection, connectionId) => {
+    const inactiveTime = now - connection.lastActivityAt;
+    
+    if (inactiveTime > maxInactiveTime) {
+      if (removeConnection(connectionId)) {
+        removedCount++;
+      }
+    }
+  });
+  
+  if (removedCount > 0) {
+    logger.info(`Cleaned up ${removedCount} inactive connections`);
+  }
+  
+  return removedCount;
+}
+
+module.exports = {
+  registerConnection,
+  updateConnectionSocket,
+  updateConnectionMetadata,
+  getConnection,
+  removeConnection,
+  getUserConnections,
+  countUserConnections,
+  isUserConnected,
+  removeUserConnections,
+  getConnectionStats,
+  cleanupInactiveConnections
+};
