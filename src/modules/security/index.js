@@ -1,11 +1,13 @@
+'use strict';
+
 /**
  * Export security module
  */
-const { apiKeyRoutes } = require('./routes');
+const routes = require('./routes');
 const { ApiKey, ApiKeyUsage, AuditLog, RateLimit } = require('./models');
 
 module.exports = {
-  apiKeyRoutes,
+  routes,
   ApiKeyModel: ApiKey,
   ApiKeyUsageModel: ApiKeyUsage,
   AuditLogModel: AuditLog,

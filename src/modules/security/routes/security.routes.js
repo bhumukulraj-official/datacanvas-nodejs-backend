@@ -1,9 +1,9 @@
 const express = require('express');
-const apiKeyController = require('./controllers/unified-api-key.controller');
-const auditController = require('./controllers/audit.controller');
-const auth = require('../../shared/middleware/auth.middleware');
-const validate = require('../../shared/middleware/validate.middleware');
-const { apiKeyValidator, auditLogValidator } = require('./validators');
+const apiKeyController = require('../controllers/unified-api-key.controller');
+const auditController = require('../controllers/audit.controller');
+const auth = require('../../../shared/middleware/auth.middleware');
+const validate = require('../../../shared/middleware/validate.middleware');
+const { apiKeyValidator, auditLogValidator } = require('../validators');
 
 const router = express.Router();
 
