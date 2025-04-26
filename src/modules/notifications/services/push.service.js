@@ -4,12 +4,29 @@ const PushSubscription = require('../models/PushSubscription');
 const preferenceService = require('./preference.service');
 const templateService = require('./template.service');
 
-// Configure web-push with VAPID keys
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:notifications@datacanvas.io',
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+// Flag to indicate if push notifications are enabled
+let pushNotificationsEnabled = false;
+
+// Configure web-push with VAPID keys if available
+try {
+  const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
+  const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
+  const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:notifications@datacanvas.io';
+  
+  if (vapidPublicKey && vapidPrivateKey) {
+    webpush.setVapidDetails(
+      vapidSubject,
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+    pushNotificationsEnabled = true;
+    logger.info('Push notifications enabled with VAPID keys');
+  } else {
+    logger.warn('Push notifications disabled: VAPID keys not provided in environment variables');
+  }
+} catch (error) {
+  logger.error('Failed to configure push notifications:', error);
+}
 
 /**
  * Save a new push subscription for a user
@@ -103,6 +120,15 @@ const deleteSubscription = async (endpoint) => {
  */
 const sendPushNotification = async (notification, userId) => {
   try {
+    // Check if push notifications are enabled
+    if (!pushNotificationsEnabled) {
+      logger.info('Push notification skipped: feature disabled (VAPID keys not configured)', { 
+        userId, 
+        notificationId: notification.id 
+      });
+      return { skipped: true, reason: 'feature_disabled' };
+    }
+
     // Check if user wants to receive push notifications
     const shouldSend = await preferenceService.shouldSendNotification(userId, notification, 'push');
     if (!shouldSend) {
@@ -261,10 +287,23 @@ const getUserSubscriptions = async (userId) => {
   }
 };
 
+/**
+ * Get the VAPID public key
+ * @returns {String|null} VAPID public key or null if not available
+ */
+const getVapidPublicKey = () => {
+  if (!pushNotificationsEnabled) {
+    logger.info('VAPID public key requested but push notifications are disabled');
+    return null;
+  }
+  return process.env.VAPID_PUBLIC_KEY;
+};
+
 module.exports = {
   saveSubscription,
   deleteSubscription,
   sendPushNotification,
   sendScheduledPushNotification,
-  getUserSubscriptions
+  getUserSubscriptions,
+  getVapidPublicKey
 }; 

@@ -6,7 +6,7 @@ const RefreshToken = require('../models/RefreshToken');
 const EmailVerificationToken = require('../models/EmailVerificationToken');
 const { AppError } = require('../../../shared/errors');
 const config = require('../../../shared/config');
-const logger = require('../../../shared/logger');
+const logger = require('../../../shared/utils/logger');
 const AuditLog = require('../models/AuditLog');
 
 class AuthService {

@@ -48,13 +48,11 @@ router.post('/import',
   educationController.importEducation
 );
 
-module.exports = router;
-
-/**
- * Export routes
- */
+// Import specific routes
 const educationRoutes = require('./education.routes');
 
+// Export the main router and specific routes
 module.exports = {
+  mainRouter: router,
   educationRoutes
 }; 

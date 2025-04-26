@@ -1,6 +1,9 @@
 /**
  * Education Module Routes
  */
-const educationRoutes = require('./routes');
+const { mainRouter, educationRoutes } = require('./routes');
 
-module.exports = educationRoutes; 
+module.exports = {
+  educationRoutes,
+  educationMainRouter: mainRouter
+}; 

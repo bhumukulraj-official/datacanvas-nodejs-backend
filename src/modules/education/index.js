@@ -1,10 +1,10 @@
 /**
  * Export education module
  */
-const { educationRoutes } = require('./routes');
+const { educationRoutes, educationMainRouter } = require('./routes');
 const { Education } = require('./models');
 
 module.exports = {
-  educationRoutes,
+  educationRoutes: educationMainRouter,
   EducationModel: Education
 }; 

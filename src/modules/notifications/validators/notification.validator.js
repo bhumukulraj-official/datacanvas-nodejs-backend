@@ -88,8 +88,19 @@ const validateGetNotifications = (req, res, next) => {
   next();
 };
 
+// Add aliases for the middleware functions to match route expectations
+const createNotification = validateCreateNotification;
+const getUserNotifications = validateGetNotifications;
+const markAsRead = validateUpdateNotification;
+const deleteNotification = validateUpdateNotification;
+
 module.exports = {
   validateCreateNotification,
   validateUpdateNotification,
   validateGetNotifications,
+  // Export aliases for route compatibility
+  createNotification,
+  getUserNotifications,
+  markAsRead,
+  deleteNotification
 }; 

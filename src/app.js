@@ -8,7 +8,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const { join } = require('path');
 const errorHandler = require('./shared/middleware/error.middleware');
-const { logger } = require('./shared/utils');
+const { logger } = require('./shared/utils/logger');
 const apiV1Routes = require('./api/v1/routes');
 
 // Import system services

@@ -3,7 +3,7 @@
  * Uses existing database schema without modifications
  */
 const { DataTypes } = require('sequelize');
-const sequelize = require('../../../shared/database/connection');
+const { sequelize } = require('../../../shared/database');
 const User = require('./User');
 
 /**

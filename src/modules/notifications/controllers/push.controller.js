@@ -126,12 +126,13 @@ const getUserSubscriptions = async (req, res) => {
  */
 const getVapidPublicKey = async (req, res) => {
   try {
-    const publicKey = process.env.VAPID_PUBLIC_KEY;
+    const publicKey = pushService.getVapidPublicKey();
     
     if (!publicKey) {
-      return res.status(500).json({
+      return res.status(503).json({
         status: 'error',
-        message: 'VAPID public key not configured'
+        message: 'Push notifications are not currently enabled',
+        code: 'PUSH_001'
       });
     }
     

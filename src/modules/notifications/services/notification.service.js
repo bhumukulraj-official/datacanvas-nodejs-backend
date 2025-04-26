@@ -698,7 +698,7 @@ async function processScheduledNotifications() {
     
     for (const notification of scheduledNotifications) {
       try {
-        await processScheduledNotification(notification);
+        await processSingleScheduledNotification(notification);
         results.processed += 1;
         results.details.push({
           id: notification.id,
@@ -729,7 +729,7 @@ async function processScheduledNotifications() {
  * @param {Object} notification The notification to process
  * @returns {Promise<void>}
  */
-async function processScheduledNotification(notification) {
+async function processSingleScheduledNotification(notification) {
   try {
     logger.info(`Processing scheduled notification ${notification.id}`);
     
@@ -777,6 +777,7 @@ module.exports = {
   createBulkNotifications,
   scheduleNotification,
   processScheduledNotification,
+  processSingleScheduledNotification,
   sendDailyDigests,
   sendWeeklyDigests,
   processScheduledNotifications,

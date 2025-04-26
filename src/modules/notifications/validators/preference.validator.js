@@ -97,7 +97,12 @@ const validateUpdateCategoryPreferences = (req, res, next) => {
   next();
 };
 
+// Alias for route compatibility
+const updatePreferences = validateUpdatePreferences;
+
 module.exports = {
   validateUpdatePreferences,
   validateUpdateCategoryPreferences,
+  // Export aliases for route compatibility
+  updatePreferences
 }; 

@@ -17,7 +17,7 @@ router.get(
   '/',
   authenticate,
   validate(notificationValidator.getUserNotifications),
-  notificationController.getUserNotifications
+  notificationController.getNotifications
 );
 
 router.post(
@@ -51,20 +51,20 @@ router.delete(
 router.get(
   '/preferences',
   authenticate,
-  preferenceController.getUserPreferences
+  preferenceController.getPreferences
 );
 
 router.put(
   '/preferences',
   authenticate,
   validate(preferenceValidator.updatePreferences),
-  preferenceController.updateUserPreferences
+  preferenceController.updatePreferences
 );
 
 router.post(
   '/preferences/reset',
   authenticate,
-  preferenceController.resetUserPreferences
+  preferenceController.resetPreferences
 );
 
 // Push notification routes

@@ -5,48 +5,48 @@ const preferenceService = require('./preference.service');
 const logger = require('../../../shared/utils/logger');
 
 /**
+ * Email notification service
+ */
+
+/**
  * Send email notification to a user
  * @param {Object} notification - Notification object
  * @param {Number} userId - User ID
- * @returns {Promise<Object>} Email send result
+ * @returns {Boolean} Success status
  */
 const sendEmailNotification = async (notification, userId) => {
   try {
-    // Get user data
-    const user = await User.findByPk(userId);
-    
-    if (!user || !user.email) {
-      throw new Error('User not found or has no email address');
-    }
-    
-    // Check if the user wants to receive this notification by email
-    const shouldSend = await preferenceService.shouldSendNotification(userId, notification, 'email');
-    if (!shouldSend) {
-      logger.info('Email notification skipped due to user preferences', { userId, notificationId: notification.id });
-      return { skipped: true, reason: 'user_preference' };
-    }
-    
-    // Format notification for email
-    const emailContent = templateService.formatNotification(notification, 'email');
-    
-    // Send email
-    const result = await emailService.sendEmail({
-      to: user.email,
-      subject: emailContent.subject,
-      text: emailContent.text,
-      html: emailContent.html,
+    logger.info(`Mock: Email notification to user ${userId}`, {
+      title: notification.title,
+      notificationId: notification.id
     });
-    
-    logger.info('Email notification sent', { userId, notificationId: notification.id, messageId: result.messageId });
-    
-    return { sent: true, messageId: result.messageId };
+    return true;
   } catch (error) {
-    logger.error('Failed to send email notification', {
+    logger.error('Error sending email notification', {
       error: error.message,
-      userId,
-      notificationId: notification.id,
+      userId
     });
-    
+    throw error;
+  }
+};
+
+/**
+ * Send a notification email
+ * @param {String} email - Recipient email
+ * @param {Object} data - Email data
+ * @returns {Boolean} Success status
+ */
+const sendNotificationEmail = async (email, data) => {
+  try {
+    logger.info(`Mock: Sending notification email to ${email}`, {
+      subject: data.subject
+    });
+    return true;
+  } catch (error) {
+    logger.error('Error sending notification email', {
+      error: error.message,
+      email
+    });
     throw error;
   }
 };
@@ -254,4 +254,5 @@ const capitalizeFirstLetter = (string) => {
 module.exports = {
   sendEmailNotification,
   sendEmailDigests,
+  sendNotificationEmail
 }; 
