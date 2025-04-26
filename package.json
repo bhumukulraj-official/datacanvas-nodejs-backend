@@ -6,14 +6,6 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest --transformIgnorePatterns \"node_modules/(?!(chai)/)\"",
-    "test:unit": "jest --testPathPattern=tests/unit --transformIgnorePatterns \"node_modules/(?!(chai)/)\"",
-    "test:unit:coverage": "jest --testPathPattern=tests/unit --coverage --transformIgnorePatterns \"node_modules/(?!(chai)/)\"",
-    "test:mocha": "mocha \"tests/unit/**/*.test.js\"",
-    "test:mocha:education": "mocha tests/unit/modules/education/services/education-mock.test.js",
-    "test:skills": "jest tests/unit/modules/skills/services/skill.service.test.js --transformIgnorePatterns \"node_modules/(?!(chai)/)\"",
-    "test:skills:watch": "jest tests/unit/modules/skills/services/skill.service.test.js --watch --transformIgnorePatterns \"node_modules/(?!(chai)/)\"",
-    "test:education": "jest tests/unit/modules/education/services/education.service.test.js --transformIgnorePatterns \"node_modules/(?!(chai)/)\"",
     "lint": "eslint .",
     "migrate": "npx sequelize-cli db:migrate",
     "migrate:undo": "npx sequelize-cli db:migrate:undo",
@@ -21,18 +13,6 @@
     "seed": "npx sequelize-cli db:seed:all",
     "seed:undo:all": "npx sequelize-cli db:seed:undo:all",
     "generate:migrations": "node src/shared/database/generateMigrations.js"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "transformIgnorePatterns": [
-      "node_modules/(?!(chai)/)"
-    ],
-    "transform": {
-      "^.+\\.jsx?$": "babel-jest"
-    },
-    "setupFilesAfterEnv": [
-      "<rootDir>/jest.setup.js"
-    ]
   },
   "dependencies": {
     "async-lock": "^1.4.0",
@@ -72,23 +52,12 @@
     "ws": "^8.13.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.26.10",
-    "@babel/preset-env": "^7.26.9",
-    "babel-jest": "^29.7.0",
-    "bcrypt": "^5.1.1",
-    "chai": "^4.3.7",
     "eslint": "^8.39.0",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-plugin-import": "^2.27.5",
-    "jest": "^29.5.0",
     "jsonwebtoken": "^9.0.2",
-    "mocha": "^11.1.0",
-    "node-mocks-http": "^1.16.2",
     "nodemon": "^3.1.9",
     "sequelize-cli": "^6.6.2",
-    "sinon": "^20.0.0",
-    "sinon-express-mock": "^2.2.1",
-    "supertest": "^6.3.3",
     "uuid": "^11.1.0"
   },
   "engines": {
