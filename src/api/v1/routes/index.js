@@ -10,7 +10,7 @@ const router = express.Router();
 // Import route modules
 const { authRoutes } = require('../../../modules/auth');
 const { profileRoutes } = require('../../../modules/profile');
-const { projectRoutes } = require('../../../modules/projects');
+const { projectRoutes } = require('../../../modules/project');
 const { blogRoutes } = require('../../../modules/blog');
 const { contactRoutes } = require('../../../modules/contact');
 const { mediaRoutes, optimizationRoutes } = require('../../../modules/media');

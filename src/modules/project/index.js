@@ -1,6 +1,6 @@
 /**
- * Projects module index file
- * Exports projects module components
+ * Project module index file
+ * Exports project module components
  */
 
 const projectRoutes = require('./routes');

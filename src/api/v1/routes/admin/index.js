@@ -14,7 +14,7 @@ router.use(auth.requireRole('admin'));
 
 // Import admin routes from modules
 const { adminRoutes: blogAdminRoutes } = require('../../../../modules/blog');
-const { adminRoutes: projectAdminRoutes } = require('../../../../modules/projects');
+const { adminRoutes: projectAdminRoutes } = require('../../../../modules/project');
 const { adminRoutes: userAdminRoutes } = require('../../../../modules/users');
 const { adminRoutes: skillsAdminRoutes } = require('../../../../modules/skills');
 const { adminRoutes: experienceAdminRoutes } = require('../../../../modules/experience');

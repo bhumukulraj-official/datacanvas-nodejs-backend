@@ -1,12 +1,12 @@
 const express = require('express');
-const controller = require('./controllers/project.controller');
-const enhancedController = require('./controllers/project-enhanced.controller');
-const webhookController = require('./controllers/project-webhook.controller');
-const validator = require('./validators/project.validator');
-const enhancedValidator = require('./validators/project-enhanced.validator');
-const auth = require('../../shared/middleware/auth.middleware');
-const rateLimiter = require('../../shared/middleware/rate-limiter.middleware');
-const { validateStatusTransition, normalizeProjectStatus } = require('./middleware/project-status.middleware');
+const controller = require('../controllers/project.controller');
+const enhancedController = require('../controllers/project-enhanced.controller');
+const webhookController = require('../controllers/project-webhook.controller');
+const validator = require('../validators/project.validator');
+const enhancedValidator = require('../validators/project-enhanced.validator');
+const auth = require('../../../shared/middleware/auth.middleware');
+const rateLimiter = require('../../../shared/middleware/rate-limiter.middleware');
+const { validateStatusTransition, normalizeProjectStatus } = require('../middleware/project-status.middleware');
 
 const router = express.Router();
 

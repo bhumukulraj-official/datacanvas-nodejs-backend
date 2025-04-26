@@ -8,42 +8,49 @@ class AppError extends Error {
    * Create an AppError
    * @param {string} message - Error message
    * @param {number} statusCode - HTTP status code
-   * @param {string} code - Error code
-   * @param {Object} details - Additional error details
    */
-  constructor(message, statusCode = 500, code = 'SERVER_ERROR', details = {}) {
+  constructor(message, statusCode = 500) {
     super(message);
     this.name = this.constructor.name;
     this.statusCode = statusCode;
-    this.code = code;
-    this.details = details;
-    this.timestamp = new Date().toISOString();
     this.isOperational = true;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
-    
     Error.captureStackTrace(this, this.constructor);
   }
 }
 
-class NotFoundError extends AppError {
-  constructor(message = 'Resource not found') {
-    super(message, 404);
-    this.code = 'NOT_001';
-  }
-}
-
 class ValidationError extends AppError {
-  constructor(message = 'Validation error', details = null) {
-    super(message, 400);
-    this.code = 'VAL_001';
-    this.details = details;
+  constructor(message, details = []) {
+    super(message || 'Validation error', 400);
+    this.name = 'ValidationError';
+    this.details = Array.isArray(details) ? details : [details];
   }
 }
 
 class AuthenticationError extends AppError {
-  constructor(message = 'Authentication error') {
-    super(message, 401);
-    this.code = 'AUTH_001';
+  constructor(message) {
+    super(message || 'Authentication error', 401);
+    this.name = 'AuthenticationError';
+  }
+}
+
+class ForbiddenError extends AppError {
+  constructor(message) {
+    super(message || 'Insufficient permissions', 403);
+    this.name = 'ForbiddenError';
+  }
+}
+
+class NotFoundError extends AppError {
+  constructor(message) {
+    super(message || 'Resource not found', 404);
+    this.name = 'NotFoundError';
+  }
+}
+
+class ConflictError extends AppError {
+  constructor(message) {
+    super(message || 'Resource already exists', 409);
+    this.name = 'ConflictError';
   }
 }
 
@@ -101,12 +108,6 @@ class WebSocketError extends AppError {
   }
 }
 
-class ConflictError extends AppError {
-  constructor(message) {
-    super(message || 'Conflict error', 409);
-  }
-}
-
 class TooManyRequestsError extends AppError {
   constructor(message) {
     super(message || 'Too many requests', 429);
@@ -121,9 +122,11 @@ class ServerError extends AppError {
 
 module.exports = {
   AppError,
-  NotFoundError,
   ValidationError,
   AuthenticationError,
+  ForbiddenError,
+  NotFoundError,
+  ConflictError,
   TokenExpiredError,
   InvalidTokenError,
   PermissionError,
@@ -131,7 +134,6 @@ module.exports = {
   DatabaseError,
   RateLimitError,
   WebSocketError,
-  ConflictError,
   TooManyRequestsError,
   ServerError
 }; 
