@@ -3,6 +3,7 @@ const logger = require('../../shared/utils/logger');
 const scheduledNotificationsJob = require('./jobs/scheduledNotifications');
 const { dailyDigestJob, weeklyDigestJob } = require('./jobs/notificationDigests');
 const publishScheduledPostsJob = require('./jobs/publishScheduledPosts');
+const { schedulerRoutes } = require('./routes');
 
 // Collection to store all registered jobs
 const registeredJobs = new Map();
@@ -114,5 +115,6 @@ module.exports = {
   registerJob,
   startJob,
   stopJob,
-  initializeScheduler
+  initializeScheduler,
+  schedulerRoutes
 }; 

@@ -18,6 +18,13 @@ class AppError extends Error {
   }
 }
 
+class BadRequestError extends AppError {
+  constructor(message) {
+    super(message || 'Bad request', 400);
+    this.name = 'BadRequestError';
+  }
+}
+
 class ValidationError extends AppError {
   constructor(message, details = []) {
     super(message || 'Validation error', 400);
@@ -135,5 +142,6 @@ module.exports = {
   RateLimitError,
   WebSocketError,
   TooManyRequestsError,
-  ServerError
+  ServerError,
+  BadRequestError
 }; 
