@@ -1,0 +1,34 @@
+openapi: 3.0.0
+info:
+  title: Portfolio Backend API
+  version: 1.0.0
+  description: API documentation for the Portfolio Backend
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+  - url: https://api.yourdomain.com/api/v1
+    description: Production server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the API
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  version:
+                    type: string
+                    example: 1.0.0
+                  timestamp:
+                    type: string
+                    format: date-time 

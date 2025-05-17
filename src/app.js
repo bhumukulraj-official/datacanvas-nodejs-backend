@@ -1,0 +1,50 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
+
+// Load environment variables
+require('dotenv').config();
+
+const app = express();
+
+// Load swagger document
+const swaggerDocument = YAML.load(path.join(__dirname, '../docs/swagger.yaml'));
+
+// Middlewares
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:']
+    }
+  }
+}));
+app.use(cors());
+app.use(express.json());
+app.use(morgan('dev'));
+
+// API Routes (to be implemented)
+// app.use('/api/v1', routes);
+
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Health check endpoint
+app.get('/api/v1/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    version: '1.0.0',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Error handling middleware (to be implemented)
+// app.use(errorHandler);
+
+module.exports = app; 

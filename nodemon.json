@@ -1,0 +1,17 @@
+{
+  "watch": [
+    "src/",
+    ".env"
+  ],
+  "ext": "js,json,yaml",
+  "ignore": [
+    "src/logs/*",
+    "src/tests/*",
+    "node_modules/*"
+  ],
+  "exec": "node src/server.js",
+  "events": {
+    "restart": "echo \"[Docker] App restarted due to changes...\""
+  },
+  "delay": "1000"
+} 
