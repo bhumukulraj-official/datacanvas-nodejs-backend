@@ -13,3 +13,6 @@ GRANT ALL ON SCHEMA messaging TO postgres;
 GRANT ALL ON SCHEMA billing TO postgres;
 GRANT ALL ON SCHEMA public_api TO postgres;
 GRANT ALL ON SCHEMA metrics TO postgres; 
+
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
