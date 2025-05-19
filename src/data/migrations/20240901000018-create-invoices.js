@@ -28,21 +28,6 @@ module.exports = {
           deleted_at TIMESTAMPTZ
         );
 
-        -- Invoice Items Table
-        CREATE TABLE billing.invoice_items (
-          id SERIAL PRIMARY KEY,
-          invoice_id INT REFERENCES billing.invoices(id) ON DELETE CASCADE,
-          description TEXT NOT NULL,
-          quantity DECIMAL(10,2) NOT NULL,
-          unit_price DECIMAL(10,2) NOT NULL,
-          amount DECIMAL(10,2) NOT NULL,
-          metadata JSONB DEFAULT '{}',
-          is_deleted BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          deleted_at TIMESTAMPTZ
-        );
-
         -- Security comment for PCI compliance
         COMMENT ON COLUMN billing.invoices.payment_details IS 'Encrypted. Contains sensitive payment information that must be stored encrypted.';
 
@@ -57,11 +42,6 @@ module.exports = {
         CREATE INDEX idx_invoices_payment_details ON billing.invoices USING GIN(payment_details);
         CREATE INDEX idx_invoices_metadata ON billing.invoices USING GIN(metadata);
         CREATE INDEX idx_invoices_created_at_brin ON billing.invoices USING BRIN(created_at);
-
-        -- Indexes for Invoice Items
-        CREATE INDEX idx_invoice_items_invoice_id ON billing.invoice_items(invoice_id);
-        CREATE INDEX idx_invoice_items_is_deleted ON billing.invoice_items(is_deleted);
-        CREATE INDEX idx_invoice_items_metadata ON billing.invoice_items USING GIN(metadata);
       `, { transaction: t });
     });
   },
@@ -69,7 +49,6 @@ module.exports = {
   down: async (queryInterface, Sequelize) => {
     return queryInterface.sequelize.transaction(async (t) => {
       await queryInterface.sequelize.query(`
-        DROP TABLE IF EXISTS billing.invoice_items CASCADE;
         DROP TABLE IF EXISTS billing.invoices CASCADE;
       `, { transaction: t });
     });

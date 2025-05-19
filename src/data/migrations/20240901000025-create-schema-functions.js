@@ -17,7 +17,7 @@ module.exports = {
     `);
 
     // Create functions within a transaction
-    await queryInterface.sequelize.transaction(async (t) => {
+    return queryInterface.sequelize.transaction(async (t) => {
       await queryInterface.sequelize.query(`
         -- JSONB helper functions
         CREATE OR REPLACE FUNCTION public.merge_jsonb(a jsonb, b jsonb)
@@ -126,7 +126,7 @@ module.exports = {
   },
 
   down: async (queryInterface, Sequelize) => {
-    await queryInterface.sequelize.query(`
+    return queryInterface.sequelize.query(`
       DROP FUNCTION IF EXISTS metrics.log_table_change() CASCADE;
       DROP FUNCTION IF EXISTS public.jsonb_extract_typed(jsonb, text, anyelement) CASCADE;
       DROP FUNCTION IF EXISTS public.merge_jsonb(jsonb, jsonb) CASCADE;
