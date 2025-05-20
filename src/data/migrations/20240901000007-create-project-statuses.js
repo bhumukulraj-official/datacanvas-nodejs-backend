@@ -12,7 +12,8 @@ module.exports = {
           description TEXT,
           is_active BOOLEAN DEFAULT TRUE,
           display_order INT DEFAULT 0,
-          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
 
         -- Insert initial statuses

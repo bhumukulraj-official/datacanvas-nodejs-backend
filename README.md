@@ -120,7 +120,11 @@ npx sequelize-cli migration:generate --name migration_name
 ```bash
 npx sequelize-cli seed:generate --name seeder_name
 ```
+### Seed sample data:
 
+```bash
+npx sequelize-cli db:seed --seed 20240901000007-seed-portfolio-views.js
+```
 ## Running the Application
 
 ### Development Mode
@@ -251,4 +255,78 @@ If you encounter issues with specific migrations or seeders:
 
 ## License
 
-[MIT License](LICENSE) 
+[MIT License](LICENSE)
+
+# Portfolio Backend - Database Seed Files
+
+This repository contains the database structure and seed files for a portfolio management system. The database is designed for PostgreSQL and includes schemas for authentication, content management, billing, messaging, and metrics.
+
+## Database Structure
+
+The database consists of the following schemas:
+
+- **auth**: User authentication and authorization
+- **content**: Portfolio content, projects, and skills
+- **billing**: Invoices and payment processing
+- **messaging**: Communication between users
+- **metrics**: System and user analytics
+
+## Seed Files
+
+The seed files are organized by schema and contain sample data for testing and development:
+
+- `00-schema-seeds.sql`: Main file that creates schemas and runs all seed files
+- `01-auth-seeds.sql`: Sample users, roles, and authentication tokens
+- `02-content-seeds.sql`: Sample projects, profiles, and skills
+- `03-billing-seeds.sql`: Sample invoices and payments
+- `04-messaging-seeds.sql`: Sample messages and attachments
+- `05-metrics-seeds.sql`: Sample analytics data
+
+## How to Use
+
+### Prerequisites
+
+- PostgreSQL 12 or higher
+- psql command-line tool
+
+### Setup and Seeding
+
+1. Create a new PostgreSQL database:
+   ```
+   createdb portfolio_db
+   ```
+
+2. Run the schema creation script:
+   ```
+   psql -d portfolio_db -f portfolio_db.sql
+   ```
+
+3. Run the seed files:
+   ```
+   psql -d portfolio_db -f seeds/00-schema-seeds.sql
+   ```
+
+Alternatively, you can run each seed file individually if you want more control:
+
+```
+psql -d portfolio_db -f seeds/01-auth-seeds.sql
+psql -d portfolio_db -f seeds/02-content-seeds.sql
+# etc.
+```
+
+## Sample Data
+
+The seed files create:
+
+- 5 users with different roles (admin, developer, client, etc.)
+- 5 projects with different statuses
+- Various invoices, payments, and messages between users
+- Sample metrics and analytics data
+
+The data is structured to demonstrate relationships between different entities in the system.
+
+## Notes
+
+- All passwords in the seed data are hashed but for development purposes only. In a production environment, ensure proper security measures are implemented.
+- The sample data includes timestamps relative to the current time when the seeds are run.
+- Foreign key relationships are maintained throughout the seed data. 

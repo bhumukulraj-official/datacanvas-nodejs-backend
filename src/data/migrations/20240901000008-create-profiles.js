@@ -15,7 +15,7 @@ module.exports = {
           location VARCHAR(100),
           social_links JSONB DEFAULT '{}',
           resume_url VARCHAR(255),
-          additional_fields JSONB DEFAULT '{}',
+          metadata JSONB DEFAULT '{}',
           is_deleted BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -29,7 +29,7 @@ module.exports = {
         CREATE INDEX idx_profiles_user_id ON content.profiles(user_id);
         CREATE INDEX idx_profiles_is_deleted ON content.profiles(is_deleted);
         CREATE INDEX idx_profiles_social_links ON content.profiles USING GIN(social_links);
-        CREATE INDEX idx_profiles_additional_fields ON content.profiles USING GIN(additional_fields);
+        CREATE INDEX idx_profiles_metadata ON content.profiles USING GIN(metadata);
       `, { transaction: t });
     });
   },

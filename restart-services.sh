@@ -18,6 +18,6 @@ npx sequelize-cli db:migrate
 
 # Run database seeds
 echo -e "\033[1;34mRunning database seeds...\033[0m"
-echo "npx sequelize-cli db:seed:all"
+npx sequelize-cli db:seed:all
 
 echo -e "\033[1;32mAll services have been restarted and database is ready!\033[0m" 
