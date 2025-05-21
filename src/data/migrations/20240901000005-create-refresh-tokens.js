@@ -20,6 +20,7 @@ module.exports = {
         CREATE INDEX idx_refresh_tokens_token ON auth.refresh_tokens(token);
         CREATE INDEX idx_refresh_tokens_is_revoked ON auth.refresh_tokens(is_revoked);
         CREATE INDEX idx_refresh_tokens_device_info ON auth.refresh_tokens USING GIN(device_info);
+        CREATE INDEX idx_refresh_tokens_user_token ON auth.refresh_tokens(user_id, token);
       `, { transaction: t });
     });
   },

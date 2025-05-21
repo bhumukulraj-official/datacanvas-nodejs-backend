@@ -25,23 +25,26 @@ module.exports = {
       // Create simple views first
       await queryInterface.sequelize.query(`
         -- Create a simple projects view
-        CREATE OR REPLACE VIEW public_api.projects AS
+        CREATE OR REPLACE VIEW public_api.projects WITH (security_barrier=true) AS
         SELECT 
-          id,
-          uuid,
-          title,
-          description,
-          thumbnail_url,
-          tags,
-          technologies,
-          github_url,
-          live_url,
-          is_featured,
-          status_code,
-          created_at,
-          updated_at
-        FROM content.projects
-        WHERE is_deleted = FALSE AND visibility = 'portfolio';
+          p.id,
+          p.uuid,
+          p.title,
+          p.description,
+          p.thumbnail_url,
+          p.technologies,
+          p.github_url,
+          p.live_url,
+          p.is_featured,
+          p.status_code,
+          p.created_at,
+          p.updated_at,
+          array_agg(t.name) FILTER (WHERE t.name IS NOT NULL) as tags
+        FROM content.projects p
+        LEFT JOIN content.project_tags pt ON p.id = pt.project_id
+        LEFT JOIN content.tags t ON pt.tag_id = t.id
+        WHERE p.is_deleted = FALSE AND p.visibility = 'portfolio'
+        GROUP BY p.id;
         
         -- Create a simple profiles view
         CREATE OR REPLACE VIEW public_api.user_profiles AS
@@ -84,15 +87,18 @@ module.exports = {
           p.title,
           p.description,
           p.thumbnail_url,
-          p.tags,
           p.technologies,
           p.status_code,
           p.created_at,
           p.updated_at,
-          pca.client_id
+          pca.client_id,
+          array_agg(t.name) FILTER (WHERE t.name IS NOT NULL) as tags
         FROM content.projects p
         JOIN content.project_client_assignments pca ON p.id = pca.project_id AND pca.is_active = TRUE
-        WHERE p.is_deleted = FALSE;
+        LEFT JOIN content.project_tags pt ON p.id = pt.project_id
+        LEFT JOIN content.tags t ON pt.tag_id = t.id
+        WHERE p.is_deleted = FALSE
+        GROUP BY p.id, pca.client_id;
       `, { transaction: t });
     });
   },

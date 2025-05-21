@@ -28,6 +28,7 @@ module.exports = {
         CREATE INDEX idx_users_is_deleted ON auth.users(is_deleted);
         CREATE INDEX idx_users_uuid ON auth.users(uuid);
         CREATE INDEX idx_users_metadata ON auth.users USING GIN(metadata);
+        CREATE INDEX idx_users_email_verified ON auth.users(email, email_verified);
       `, { transaction: t });
     });
   },

@@ -24,6 +24,8 @@ module.exports = {
         CREATE INDEX idx_project_client_assignments_client_id ON content.project_client_assignments(client_id);
         CREATE INDEX idx_project_client_assignments_is_active ON content.project_client_assignments(is_active);
         CREATE UNIQUE INDEX idx_unique_active_project_client ON content.project_client_assignments(project_id, client_id) WHERE is_active = TRUE;
+        CREATE INDEX idx_project_client_active 
+        ON content.project_client_assignments(project_id, client_id, is_active);
       `, { transaction: t });
     });
   },

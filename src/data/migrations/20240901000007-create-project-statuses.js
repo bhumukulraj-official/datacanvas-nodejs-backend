@@ -2,7 +2,7 @@
 
 module.exports = {
   up: async (queryInterface, Sequelize) => {
-    // Wrap in transaction for safety
+    // Wrap entire migration in transaction
     return queryInterface.sequelize.transaction(async (t) => {
       await queryInterface.sequelize.query(`
         -- Project Statuses Table

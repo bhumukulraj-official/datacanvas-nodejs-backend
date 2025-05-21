@@ -14,7 +14,7 @@ module.exports = {
           file_size BIGINT,
           file_type VARCHAR(100),
           version INT DEFAULT 1,
-          uploaded_by INT REFERENCES auth.users(id),
+          uploaded_by INT REFERENCES auth.users(id) ON DELETE SET NULL,
           description TEXT,
           is_deleted BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
