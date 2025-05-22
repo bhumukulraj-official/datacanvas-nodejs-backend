@@ -1,5 +1,6 @@
 const BaseRepository = require('../BaseRepository');
 const { RefreshToken } = require('../../models');
+const { Op } = require('sequelize');
 
 class RefreshTokenRepository extends BaseRepository {
   constructor() {
