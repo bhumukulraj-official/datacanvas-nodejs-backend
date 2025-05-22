@@ -11,7 +11,10 @@ module.exports = class UserRole extends BaseModel {
       },
       name: DataTypes.STRING(50),
       description: DataTypes.TEXT,
-      is_active: DataTypes.BOOLEAN,
+      is_active: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: true
+      },
       display_order: DataTypes.INTEGER
     }, {
       sequelize,
@@ -19,7 +22,7 @@ module.exports = class UserRole extends BaseModel {
       schema: 'auth',
       timestamps: true,
       createdAt: 'created_at',
-      updatedAt: false,
+      updatedAt: 'updated_at',
       paranoid: false
     });
   }

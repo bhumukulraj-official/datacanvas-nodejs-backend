@@ -5,8 +5,23 @@ const sequelize = require('../../../config/database');
 module.exports = class ProjectMetric extends BaseModel {
   static init() {
     return super.init({
-      metric_name: DataTypes.STRING(50),
-      metric_value: DataTypes.DECIMAL(15,2),
+      project_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: 'projects',
+          key: 'id'
+        },
+        onDelete: 'CASCADE'
+      },
+      metric_name: {
+        type: DataTypes.STRING(50),
+        allowNull: false
+      },
+      metric_value: {
+        type: DataTypes.DECIMAL(15,2),
+        allowNull: false
+      },
       period_start: {
         type: DataTypes.DATEONLY,
         validate: { isDate: true }
@@ -22,11 +37,15 @@ module.exports = class ProjectMetric extends BaseModel {
           }
         }
       },
-      metadata: DataTypes.JSONB
+      metadata: {
+        type: DataTypes.JSONB,
+        defaultValue: {}
+      }
     }, {
       sequelize,
       tableName: 'project_metrics',
       schema: 'metrics',
+      timestamps: true,
       indexes: [
         { fields: ['project_id'] },
         { fields: ['metric_name'] },
@@ -35,12 +54,16 @@ module.exports = class ProjectMetric extends BaseModel {
           name: 'idx_project_metrics_metadata',
           fields: ['metadata'],
           using: 'gin'
+        },
+        {
+          name: 'idx_project_metrics_project_metric_period',
+          fields: ['project_id', 'metric_name', 'period_start']
         }
       ]
     });
   }
 
   static associate({ Project }) {
-    this.belongsTo(Project);
+    this.belongsTo(Project, { foreignKey: 'project_id' });
   }
 };

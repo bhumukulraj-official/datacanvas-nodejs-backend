@@ -29,6 +29,15 @@ module.exports = class Message extends BaseModel {
         type: DataTypes.INTEGER,
         allowNull: true
       },
+      conversation_id: DataTypes.INTEGER,
+      content_moderated: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      pii_detected: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      }
     }, {
       sequelize,
       tableName: 'messages',
@@ -39,8 +48,10 @@ module.exports = class Message extends BaseModel {
         { fields: ['sender_id'] },
         { fields: ['receiver_id'] },
         { fields: ['project_id'] },
+        { fields: ['conversation_id'] },
         { fields: ['is_read'] },
         { fields: ['is_deleted'] },
+        { fields: ['uuid'] },
         { 
           name: 'idx_messages_metadata',
           fields: ['metadata'],
@@ -50,9 +61,11 @@ module.exports = class Message extends BaseModel {
     });
   }
 
-  static associate({ User, Project }) {
-    this.belongsTo(User, { as: 'sender' });
-    this.belongsTo(User, { as: 'receiver' });
-    this.belongsTo(Project);
+  static associate({ User, Project, Conversation, MessageAttachment }) {
+    this.belongsTo(User, { as: 'sender', foreignKey: 'sender_id' });
+    this.belongsTo(User, { as: 'receiver', foreignKey: 'receiver_id' });
+    this.belongsTo(Project, { foreignKey: 'project_id' });
+    this.belongsTo(Conversation, { foreignKey: 'conversation_id' });
+    this.hasMany(MessageAttachment, { foreignKey: 'message_id' });
   }
 }; 

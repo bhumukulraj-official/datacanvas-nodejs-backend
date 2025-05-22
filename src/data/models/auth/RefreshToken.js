@@ -5,20 +5,19 @@ const sequelize = require('../../../config/database');
 module.exports = class RefreshToken extends BaseModel {
   static init() {
     return super.init({
-      id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
-      },
       user_id: {
         type: DataTypes.INTEGER,
         allowNull: false
       },
       token: {
         type: DataTypes.STRING(255),
-        unique: true
+        unique: true,
+        allowNull: false
       },
-      expires_at: DataTypes.DATE,
+      expires_at: {
+        type: DataTypes.DATE,
+        allowNull: false
+      },
       device_info: {
         type: DataTypes.JSONB,
         defaultValue: {}
@@ -26,18 +25,19 @@ module.exports = class RefreshToken extends BaseModel {
       is_revoked: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
-      },
-      created_at: DataTypes.DATE
+      }
     }, {
       sequelize,
       tableName: 'refresh_tokens',
       schema: 'auth',
+      timestamps: true,
+      createdAt: 'created_at',
+      updatedAt: false, // No updated_at in migration
       indexes: [
         { fields: ['user_id'] },
         { fields: ['token'] },
         { fields: ['is_revoked'] },
-        { name: 'idx_refresh_tokens_device_info', fields: ['device_info'], using: 'gin' },
-        { fields: ['created_at'] }
+        { name: 'idx_refresh_tokens_device_info', fields: ['device_info'], using: 'gin' }
       ]
     });
   }

@@ -22,7 +22,7 @@ module.exports = class PaymentStatus extends BaseModel {
       schema: 'billing',
       timestamps: true,
       createdAt: 'created_at',
-      updatedAt: false,
+      updatedAt: 'updated_at',
       indexes: [
         { fields: ['code'] },
         { fields: ['is_active'] }

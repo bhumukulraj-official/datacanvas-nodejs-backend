@@ -1,39 +1,61 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
+const sequelize = require('../../../config/database');
 
 module.exports = class Payment extends BaseModel {
   static init() {
     return super.init({
       uuid: {
         type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4
+        defaultValue: DataTypes.UUIDV4,
+        unique: true
       },
       invoice_id: DataTypes.INTEGER,
       client_id: DataTypes.INTEGER,
-      amount: DataTypes.DECIMAL(10,2),
-      payment_date: DataTypes.DATEONLY,
-      payment_method: DataTypes.STRING(50),
+      amount: {
+        type: DataTypes.DECIMAL(10,2),
+        allowNull: false,
+        validate: { min: 0 }
+      },
+      payment_date: {
+        type: DataTypes.DATEONLY,
+        allowNull: false
+      },
+      payment_method: {
+        type: DataTypes.STRING(50),
+        validate: {
+          isIn: [['credit_card', 'bank_transfer', 'paypal']]
+        }
+      },
       payment_provider: DataTypes.STRING(50),
       transaction_id: DataTypes.STRING(255),
       status_code: DataTypes.STRING(20),
       provider_response: {
-        type: DataTypes.JSONB,
+        type: DataTypes.BLOB, // BYTEA in PostgreSQL maps to BLOB in Sequelize
         comment: 'Encrypted. Contains sensitive payment information'
       },
       notes: DataTypes.TEXT,
-      metadata: DataTypes.JSONB,
+      metadata: {
+        type: DataTypes.JSONB,
+        defaultValue: {}
+      },
       is_deleted: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
       }
     }, {
+      sequelize,
       tableName: 'payments',
       schema: 'billing',
       paranoid: true,
       indexes: [
         { fields: ['invoice_id'] },
         { fields: ['client_id'] },
-        { fields: ['status_code'] }
+        { fields: ['status_code'] },
+        { fields: ['transaction_id'] },
+        { fields: ['is_deleted'] },
+        { fields: ['uuid'] },
+        { fields: ['metadata'], using: 'gin' }
       ]
     });
   }

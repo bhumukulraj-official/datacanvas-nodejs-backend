@@ -5,29 +5,29 @@ const sequelize = require('../../../config/database');
 module.exports = class EmailVerificationToken extends BaseModel {
   static init() {
     return super.init({
-      id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
-      },
       user_id: {
         type: DataTypes.INTEGER,
         allowNull: false
       },
       token: {
         type: DataTypes.STRING(255),
-        unique: true
+        unique: true,
+        allowNull: false
       },
-      expires_at: DataTypes.DATE,
-      created_at: DataTypes.DATE
+      expires_at: {
+        type: DataTypes.DATE,
+        allowNull: false
+      }
     }, {
       sequelize,
       tableName: 'email_verification_tokens',
       schema: 'auth',
+      timestamps: true,
+      createdAt: 'created_at',
+      updatedAt: false, // No updated_at in migration
       indexes: [
         { fields: ['user_id'] },
-        { fields: ['token'] },
-        { fields: ['created_at'] }
+        { fields: ['token'] }
       ]
     });
   }

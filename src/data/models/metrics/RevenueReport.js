@@ -5,22 +5,41 @@ const sequelize = require('../../../config/database');
 module.exports = class RevenueReport extends BaseModel {
   static init() {
     return super.init({
-      report_date: DataTypes.DATEONLY,
+      report_date: {
+        type: DataTypes.DATEONLY,
+        allowNull: false
+      },
       period_type: {
         type: DataTypes.STRING(20),
         validate: {
           isIn: [['daily', 'weekly', 'monthly', 'quarterly', 'yearly']]
         }
       },
-      total_revenue: DataTypes.DECIMAL(15,2),
-      total_invoices: DataTypes.INTEGER,
-      total_paid: DataTypes.DECIMAL(15,2),
-      total_outstanding: DataTypes.DECIMAL(15,2),
-      breakdown: DataTypes.JSONB
+      total_revenue: {
+        type: DataTypes.DECIMAL(15,2),
+        allowNull: false
+      },
+      total_invoices: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      total_paid: {
+        type: DataTypes.DECIMAL(15,2),
+        allowNull: false
+      },
+      total_outstanding: {
+        type: DataTypes.DECIMAL(15,2),
+        allowNull: false
+      },
+      breakdown: {
+        type: DataTypes.JSONB,
+        defaultValue: null
+      }
     }, {
       sequelize,
       tableName: 'revenue_reports',
       schema: 'metrics',
+      timestamps: true,
       indexes: [
         { fields: ['report_date'] },
         { fields: ['period_type'] },

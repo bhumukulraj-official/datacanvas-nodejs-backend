@@ -7,14 +7,22 @@ module.exports = class User extends BaseModel {
     return super.init({
       uuid: {
         type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4
+        defaultValue: DataTypes.UUIDV4,
+        unique: true
       },
       email: {
         type: DataTypes.STRING(255),
-        unique: true
+        unique: true,
+        allowNull: false
       },
-      password_hash: DataTypes.STRING(255),
-      name: DataTypes.STRING(100),
+      password_hash: {
+        type: DataTypes.STRING(255),
+        allowNull: false
+      },
+      name: {
+        type: DataTypes.STRING(100),
+        allowNull: false
+      },
       role: {
         type: DataTypes.STRING(20),
         defaultValue: 'client'
@@ -27,7 +35,7 @@ module.exports = class User extends BaseModel {
         type: DataTypes.STRING(20),
         defaultValue: 'pending',
         validate: {
-          isIn: [['pending', 'active', 'inactive']]
+          isIn: [['pending', 'invited', 'active', 'inactive']]
         }
       },
       onboarding_date: DataTypes.DATE,
@@ -38,14 +46,6 @@ module.exports = class User extends BaseModel {
       is_deleted: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
-      },
-      created_at: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW
-      },
-      updated_at: {
-        type: DataTypes.DATE,
-        defaultValue: DataTypes.NOW
       },
       deleted_at: DataTypes.DATE
     }, {

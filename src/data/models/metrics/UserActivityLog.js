@@ -5,19 +5,39 @@ const sequelize = require('../../../config/database');
 module.exports = class UserActivityLog extends BaseModel {
   static init() {
     return super.init({
-      action_type: DataTypes.STRING(50),
+      user_id: {
+        type: DataTypes.INTEGER,
+        references: {
+          model: 'users',
+          key: 'id'
+        },
+        onDelete: 'SET NULL'
+      },
+      action_type: {
+        type: DataTypes.STRING(50),
+        allowNull: false
+      },
       entity_type: DataTypes.STRING(50),
       entity_id: DataTypes.INTEGER,
-      details: DataTypes.JSONB,
+      details: {
+        type: DataTypes.JSONB,
+        defaultValue: {}
+      },
       ip_address: {
         type: DataTypes.STRING(45),
         validate: { isIP: true }
       },
-      user_agent: DataTypes.TEXT
+      user_agent: DataTypes.TEXT,
+      retention_period: {
+        type: DataTypes.STRING, // PostgreSQL INTERVAL is represented as STRING in Sequelize
+        defaultValue: '365 days'
+      }
     }, {
       sequelize,
       tableName: 'user_activity_logs',
       schema: 'metrics',
+      timestamps: true,
+      updatedAt: false, // Only has created_at in the migration
       indexes: [
         { fields: ['user_id'] },
         { fields: ['action_type'] },
@@ -33,6 +53,6 @@ module.exports = class UserActivityLog extends BaseModel {
   }
 
   static associate({ User }) {
-    this.belongsTo(User);
+    this.belongsTo(User, { foreignKey: 'user_id' });
   }
 }; 
