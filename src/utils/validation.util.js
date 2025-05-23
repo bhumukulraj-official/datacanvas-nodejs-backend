@@ -1,0 +1,135 @@
+const Joi = require('joi');
+const { ValidationError } = require('./error.util');
+
+/**
+ * Common validation functions
+ */
+const validation = {
+  /**
+   * Validate data against a schema
+   * @param {Object} data - Data to validate
+   * @param {Joi.Schema} schema - Joi schema to validate against
+   * @param {Object} options - Joi validation options
+   * @returns {Object} Validated data
+   * @throws {ValidationError} If validation fails
+   */
+  validate: (data, schema, options = {}) => {
+    const { error, value } = schema.validate(data, {
+      abortEarly: false,
+      stripUnknown: true,
+      ...options
+    });
+
+    if (error) {
+      const details = error.details.map(detail => ({
+        field: detail.path.join('.'),
+        message: detail.message,
+        type: detail.type
+      }));
+      
+      throw new ValidationError('Validation failed', 'VALIDATION_ERROR', { errors: details });
+    }
+
+    return value;
+  },
+
+  /**
+   * Common Joi schemas for reuse
+   */
+  schemas: {
+    id: Joi.number().integer().positive().required(),
+    uuid: Joi.string().uuid().required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().min(8).required(),
+    name: Joi.string().min(2).max(100).required(),
+    phone: Joi.string().pattern(/^\+?[0-9]{10,15}$/),
+    url: Joi.string().uri(),
+    date: Joi.date().iso(),
+    boolean: Joi.boolean(),
+    number: Joi.number(),
+    string: Joi.string(),
+    array: Joi.array(),
+    object: Joi.object(),
+    
+    // Pagination schema
+    pagination: Joi.object({
+      page: Joi.number().integer().min(1).default(1),
+      limit: Joi.number().integer().min(1).max(100).default(25),
+      sort: Joi.string(),
+      order: Joi.string().valid('asc', 'desc').default('asc'),
+    }),
+    
+    // API Key schema
+    apiKey: Joi.string().pattern(/^pk_[a-f0-9]{32}_[a-z0-9]{6,8}$/),
+    
+    // Token schema
+    token: Joi.string().required(),
+  },
+
+  /**
+   * Create a schema for search filters
+   * @param {Object} filters - Object with field names and their validation schemas
+   * @returns {Joi.Schema} Schema for validating search filters
+   */
+  createFilterSchema: (filters) => {
+    return Joi.object({
+      ...filters,
+      page: Joi.number().integer().min(1).default(1),
+      limit: Joi.number().integer().min(1).max(100).default(25),
+      sort: Joi.string().default('created_at'),
+      order: Joi.string().valid('asc', 'desc').default('desc'),
+    });
+  },
+  
+  /**
+   * Check if a string is a valid UUID
+   * @param {string} str - String to validate
+   * @returns {boolean} Whether the string is a valid UUID
+   */
+  isUuid: (str) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  },
+  
+  /**
+   * Check if a string is a valid email
+   * @param {string} email - Email to validate
+   * @returns {boolean} Whether the email is valid
+   */
+  isEmail: (email) => {
+    const { error } = Joi.string().email().validate(email);
+    return !error;
+  },
+  
+  /**
+   * Sanitize a string for safe use in HTML
+   * @param {string} str - String to sanitize
+   * @returns {string} Sanitized string
+   */
+  sanitizeHtml: (str) => {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+  
+  /**
+   * Convert a string to a slug
+   * @param {string} str - String to convert
+   * @returns {string} Slug
+   */
+  slugify: (str) => {
+    if (!str) return '';
+    return String(str)
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  },
+};
+
+module.exports = validation; 
