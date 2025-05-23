@@ -5,14 +5,27 @@ const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const path = require('path');
+const fs = require('fs');
 
 // Load environment variables
 require('dotenv').config();
 
 const app = express();
 
-// Load swagger document
+// Load all documentation files
 const swaggerDocument = YAML.load(path.join(__dirname, '../docs/swagger.yaml'));
+const docsPath = path.join(__dirname, '../docs/api-endpoints');
+
+// Load all YAML files from api-endpoints directory
+fs.readdirSync(docsPath).forEach(file => {
+  if (file.endsWith('.yaml')) {
+    const endpointDoc = YAML.load(path.join(docsPath, file));
+    Object.assign(swaggerDocument.paths, endpointDoc.paths);
+    if (endpointDoc.components) {
+      Object.assign(swaggerDocument.components.schemas, endpointDoc.components.schemas);
+    }
+  }
+});
 
 // Middlewares
 app.use(helmet({

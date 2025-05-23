@@ -2,33 +2,134 @@ openapi: 3.0.0
 info:
   title: Portfolio Backend API
   version: 1.0.0
-  description: API documentation for the Portfolio Backend
+  description: |
+    Complete API documentation for the Portfolio Backend system.
+    Includes authentication, user management, projects, messaging, and billing features.
 
 servers:
   - url: http://localhost:8000/api/v1
-    description: Development server
-  - url: https://api.yourdomain.com/api/v1
+    description: Local development server
+  - url: https://api.yourdomain.com/v1
     description: Production server
 
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Users
+    description: User management
+  - name: Projects
+    description: Project management
+  - name: Messaging
+    description: Real-time messaging
+  - name: Billing
+    description: Payment and invoice management
+  - name: Files
+    description: File management
+  - name: Skills
+    description: Skill management
+  - name: Tags
+    description: Tag management
+
 paths:
-  /health:
-    get:
-      summary: Health check endpoint
-      description: Returns the health status of the API
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        '200':
-          description: API is healthy
+        200:
+          description: Successful login
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: healthy
-                  version:
-                    type: string
-                    example: 1.0.0
-                  timestamp:
-                    type: string
-                    format: date-time 
+                $ref: '#/components/schemas/AuthResponse'
+        401:
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: "SecurePassword123!"
+    
+    AuthResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, published, archived]
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        sender:
+          $ref: '#/components/schemas/User'
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+    Forbidden:
+      description: Insufficient permissions
+    NotFound:
+      description: Resource not found
+    ValidationError:
+      description: Invalid request data
+
+securitySchemes:
+  BearerAuth:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT 

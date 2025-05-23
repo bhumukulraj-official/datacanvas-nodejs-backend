@@ -1,0 +1,41 @@
+paths:
+  /billing/invoices:
+    post:
+      tags: [Billing]
+      summary: Create invoice
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId, items]
+              properties:
+                clientId:
+                  type: string
+                  format: uuid
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      description: 
+                        type: string
+                      amount:
+                        type: number
+      responses:
+        201:
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [draft, sent, paid] 

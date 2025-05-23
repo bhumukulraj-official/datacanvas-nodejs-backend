@@ -1,0 +1,55 @@
+paths:
+  /messaging/conversations:
+    post:
+      tags: [Messaging]
+      summary: Create new conversation
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participants]
+              properties:
+                participants:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        201:
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  participants:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+
+  /messaging/messages:
+    post:
+      tags: [Messaging]
+      summary: Send message
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Message'
+      responses:
+        201:
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message' 
