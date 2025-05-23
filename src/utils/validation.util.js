@@ -60,10 +60,61 @@ const validation = {
     }),
     
     // API Key schema
-    apiKey: Joi.string().pattern(/^pk_[a-f0-9]{32}_[a-z0-9]{6,8}$/),
+    apiKey: {
+      create: Joi.object({
+        name: validation.schemas.name.required()
+      }),
+      rotate: Joi.object({
+        keyId: validation.schemas.id.required()
+      })
+    },
     
     // Token schema
     token: Joi.string().required(),
+    
+    // Auth schemas
+    auth: {
+      login: Joi.object({
+        email: validation.schemas.email.required(),
+        password: validation.schemas.password.required()
+      }),
+      logout: Joi.object({
+        refreshToken: validation.schemas.token.required()
+      }),
+      refreshToken: Joi.object({
+        refreshToken: validation.schemas.token.required()
+      }),
+      requestPasswordReset: Joi.object({
+        email: validation.schemas.email.required()
+      }),
+      resetPassword: Joi.object({
+        token: validation.schemas.token.required(),
+        newPassword: validation.schemas.password.required()
+      })
+    },
+    
+    // User schemas
+    user: {
+      register: Joi.object({
+        email: validation.schemas.email.required(),
+        password: validation.schemas.password.required(),
+        name: validation.schemas.name.required()
+      }),
+      updateProfile: Joi.object({
+        name: validation.schemas.name,
+        avatar: validation.schemas.string
+      })
+    },
+    
+    // Invitation schemas
+    invitation: {
+      create: Joi.object({
+        email: validation.schemas.email.required()
+      }),
+      accept: Joi.object({
+        token: validation.schemas.token.required()
+      })
+    }
   },
 
   /**
