@@ -185,6 +185,30 @@ const validation = {
         amount: Joi.number().positive().required(),
         payment_method: Joi.string().required()
       })
+    },
+    
+    // Messaging schemas
+    messaging: {
+      conversation: {
+        create: Joi.object({
+          participants: Joi.array().items(Joi.string().uuid()).min(1).required(),
+          projectId: Joi.string().uuid().optional()
+        }),
+        updateRead: Joi.object({
+          messageId: Joi.string().uuid().required()
+        })
+      },
+      message: {
+        create: Joi.object({
+          content: Joi.string().required(),
+          attachments: Joi.array().items(
+            Joi.object({
+              url: Joi.string().uri().required(),
+              type: Joi.string().valid('image', 'file', 'video').required()
+            })
+          ).optional()
+        })
+      }
     }
   },
 

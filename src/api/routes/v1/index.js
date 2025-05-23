@@ -9,6 +9,7 @@ const tagRoutes = require('./tag.routes');
 const skillRoutes = require('./skill.routes');
 const searchRoutes = require('./search.routes');
 const billingRoutes = require('./billing.routes');
+const messagingRoutes = require('./messaging.routes');
 
 module.exports = (app) => {
   app.use('/api/v1/auth', authRoutes);
@@ -22,4 +23,5 @@ module.exports = (app) => {
   app.use('/api/v1/skills', skillRoutes);
   app.use('/api/v1/search', searchRoutes);
   app.use('/api/v1/billing', billingRoutes);
+  app.use('/api/v1/messaging', messagingRoutes);
 }; 
