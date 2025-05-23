@@ -114,6 +114,77 @@ const validation = {
       accept: Joi.object({
         token: validation.schemas.token.required()
       })
+    },
+    
+    // Project schemas
+    project: {
+      create: Joi.object({
+        title: validation.schemas.string.required(),
+        description: validation.schemas.string.required(),
+        category: validation.schemas.string.valid('web', 'mobile', 'design').required()
+      }),
+      update: Joi.object({
+        title: validation.schemas.string,
+        description: validation.schemas.string,
+        status: validation.schemas.string.valid('draft', 'published', 'archived')
+      })
+    },
+    
+    // Profile schemas
+    profile: {
+      socialLinks: Joi.object({
+        github: validation.schemas.url,
+        linkedin: validation.schemas.url,
+        twitter: validation.schemas.url
+      })
+    },
+    
+    // Tag schemas
+    tag: {
+      create: Joi.object({
+        name: Joi.string().required(),
+        category: Joi.string().valid('technology', 'design', 'methodology').required(),
+        is_technology: Joi.boolean()
+      }),
+      update: Joi.object({
+        name: Joi.string(),
+        category: Joi.string().valid('technology', 'design', 'methodology'),
+        is_technology: Joi.boolean()
+      })
+    },
+    
+    // Skill schemas
+    skill: {
+      updateProficiency: Joi.object({
+        proficiency: Joi.number().min(1).max(5).required()
+      })
+    },
+    
+    // Invoice schemas
+    invoice: {
+      create: Joi.object({
+        client_id: Joi.string().required(),
+        due_date: Joi.date().required(),
+        items: Joi.array().items(
+          Joi.object({
+            description: Joi.string().required(),
+            amount: Joi.number().positive().required(),
+            quantity: Joi.number().positive().required()
+          })
+        ).min(1)
+      }),
+      updateStatus: Joi.object({
+        status: Joi.string().valid('paid', 'pending', 'overdue').required()
+      })
+    },
+    
+    // Payment schemas
+    payment: {
+      process: Joi.object({
+        invoice_id: Joi.string().required(),
+        amount: Joi.number().positive().required(),
+        payment_method: Joi.string().required()
+      })
     }
   },
 
