@@ -13,6 +13,8 @@ servers:
     description: Production server
 
 tags:
+  - name: Health
+    description: API health monitoring
   - name: Authentication
     description: User authentication and authorization
   - name: Users
@@ -29,27 +31,30 @@ tags:
     description: Skill management
   - name: Tags
     description: Tag management
+  - name: Contact
+    description: Contact form submission
 
 paths:
+  /health:
+    $ref: './api-endpoints/health.yaml#/paths/~1health'
+    
   /auth/login:
-    post:
-      tags: [Authentication]
-      summary: User login
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LoginRequest'
-      responses:
-        200:
-          description: Successful login
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AuthResponse'
-        401:
-          $ref: '#/components/responses/Unauthorized'
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1login'
+  
+  /auth/refresh-token:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1refresh-token'
+    
+  /auth/verify-email:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1verify-email'
+    
+  /auth/resend-verification:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1resend-verification'
+    
+  /auth/change-password:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1change-password'
+    
+  /contact:
+    $ref: './api-endpoints/contact.yaml#/paths/~1contact'
 
 components:
   schemas:
@@ -106,6 +111,23 @@ components:
         status:
           type: string
           enum: [draft, published, archived]
+    
+    ProjectUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 
     Message:
       type: object
@@ -128,8 +150,8 @@ components:
     ValidationError:
       description: Invalid request data
 
-securitySchemes:
-  BearerAuth:
-    type: http
-    scheme: bearer
-    bearerFormat: JWT 
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT 

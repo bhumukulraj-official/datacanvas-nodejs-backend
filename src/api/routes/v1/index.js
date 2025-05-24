@@ -10,6 +10,8 @@ const skillRoutes = require('./skill.routes');
 const searchRoutes = require('./search.routes');
 const billingRoutes = require('./billing.routes');
 const messagingRoutes = require('./messaging.routes');
+const healthRoutes = require('./health.routes');
+const contactRoutes = require('./contact.routes');
 
 module.exports = (app) => {
   app.use('/api/v1/auth', authRoutes);
@@ -24,4 +26,6 @@ module.exports = (app) => {
   app.use('/api/v1/search', searchRoutes);
   app.use('/api/v1/billing', billingRoutes);
   app.use('/api/v1/messaging', messagingRoutes);
+  app.use('/api/v1/health', healthRoutes);
+  app.use('/api/v1/contact', contactRoutes);
 }; 

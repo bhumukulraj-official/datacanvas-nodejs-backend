@@ -1,13 +1,18 @@
 const UserRepository = require('../../data/repositories/auth/UserRepository');
 const RefreshTokenRepository = require('../../data/repositories/auth/RefreshTokenRepository');
+const EmailVerificationTokenRepository = require('../../data/repositories/auth/EmailVerificationTokenRepository');
 const passwordUtil = require('../../utils/password.util');
 const jwtUtil = require('../../utils/jwt.util');
 const { CustomError, InvalidCredentialsError, TokenExpiredError } = require('../../utils/error.util');
+const { transporter, templatePaths } = require('../../config/email');
+const logger = require('../../utils/logger.util');
+const crypto = require('crypto');
 
 class AuthService {
   constructor() {
     this.userRepository = new UserRepository();
     this.refreshTokenRepository = new RefreshTokenRepository();
+    this.emailVerificationTokenRepository = new EmailVerificationTokenRepository();
   }
 
   async login(email, password) {
@@ -77,6 +82,96 @@ class AuthService {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken
     };
+  }
+
+  async verifyEmail(token) {
+    const verificationToken = await this.emailVerificationTokenRepository.findByToken(token);
+    
+    if (!verificationToken) {
+      throw new CustomError('Invalid verification token', 400, 'AUTH_007');
+    }
+    
+    if (new Date() > verificationToken.expires_at) {
+      throw new CustomError('Token expired', 400, 'AUTH_008');
+    }
+    
+    await this.userRepository.verifyEmail(verificationToken.user_id);
+    await this.emailVerificationTokenRepository.deleteForUser(verificationToken.user_id);
+    
+    return { success: true };
+  }
+  
+  async resendVerificationEmail(email) {
+    const user = await this.userRepository.findByEmail(email);
+    
+    if (!user) {
+      throw new CustomError('Email not found', 404, 'AUTH_009');
+    }
+    
+    if (user.email_verified) {
+      throw new CustomError('Email already verified', 400, 'AUTH_010');
+    }
+    
+    await this.emailVerificationTokenRepository.deleteForUser(user.id);
+    await this._sendVerificationEmail(user);
+    
+    return { success: true };
+  }
+  
+  async changePassword(userId, currentPassword, newPassword) {
+    const user = await this.userRepository.findById(userId);
+    
+    if (!user) {
+      throw new CustomError('User not found', 404);
+    }
+    
+    const isValid = await passwordUtil.verifyPassword(currentPassword, user.password_hash);
+    if (!isValid) {
+      throw new InvalidCredentialsError('Current password is incorrect');
+    }
+    
+    // Check if new password meets requirements (should be done by validation middleware too)
+    if (newPassword.length < 8) {
+      throw new CustomError('Password must be at least 8 characters long', 400, 'VAL_001');
+    }
+    
+    const passwordHash = await passwordUtil.hashPassword(newPassword);
+    await this.userRepository.updatePassword(userId, passwordHash);
+    
+    // Invalidate all refresh tokens for security
+    await this.refreshTokenRepository.revokeAllForUser(userId);
+    
+    return { success: true };
+  }
+  
+  async _sendVerificationEmail(user) {
+    try {
+      // Generate verification token
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await this.emailVerificationTokenRepository.create({
+        token,
+        user_id: user.id,
+        expires_at: expiresAt
+      });
+      
+      // Send email
+      const verificationUrl = `${process.env.FRONTEND_URL}/auth/verify-email?token=${token}`;
+      
+      await transporter.sendMail({
+        to: user.email,
+        subject: 'Verify your email address',
+        html: `<p>Please verify your email address by clicking the link below:</p>
+               <p><a href="${verificationUrl}">${verificationUrl}</a></p>
+               <p>This link will expire in 24 hours.</p>`
+      });
+      
+      logger.info('Verification email sent', { email: user.email });
+    } catch (error) {
+      logger.error('Failed to send verification email', { error: error.message, userId: user.id });
+      throw new CustomError('Failed to send verification email', 500);
+    }
   }
 
   _sanitizeUser(user) {

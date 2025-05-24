@@ -4,6 +4,7 @@ const FileService = require('./file.service');
 const TagService = require('./tag.service');
 const SkillService = require('./skill.service');
 const SearchService = require('./search.service');
+const ContactService = require('./contact.service');
 
 module.exports = {
   ProjectService,
@@ -11,5 +12,6 @@ module.exports = {
   FileService,
   TagService,
   SkillService,
-  SearchService
-}; 
+  SearchService,
+  ContactService
+};

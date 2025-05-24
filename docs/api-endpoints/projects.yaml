@@ -38,6 +38,134 @@ paths:
                 items:
                   $ref: '#/components/schemas/Project'
 
+  /projects/{projectId}/updates:
+    post:
+      tags: [Projects]
+      summary: Create a project update
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+      responses:
+        201:
+          description: Project update created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdate'
+    
+    get:
+      tags: [Projects]
+      summary: Get all updates for a project
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: List of project updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProjectUpdate'
+  
+  /projects/{projectId}/updates/{updateId}:
+    get:
+      tags: [Projects]
+      summary: Get a specific project update
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: updateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Project update details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdate'
+        404:
+          description: Update not found
+    
+    put:
+      tags: [Projects]
+      summary: Update a project update
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: updateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+      responses:
+        200:
+          description: Project update modified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdate'
+    
+    delete:
+      tags: [Projects]
+      summary: Delete a project update
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: updateId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        204:
+          description: Project update deleted
+
 components:
   schemas:
     Project:
@@ -50,4 +178,22 @@ components:
           type: string
         status:
           type: string
-          enum: [draft, published, archived] 
+          enum: [draft, published, archived]
+    
+    ProjectUpdate:
+      type: object
+      required: [title, content]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time 

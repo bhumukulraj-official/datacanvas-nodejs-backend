@@ -57,6 +57,96 @@ class ProjectController {
       next(error);
     }
   }
+
+  async getAllProjects(req, res, next) {
+    try {
+      const projects = await ProjectService.getAllProjects();
+      res.json({
+        success: true,
+        data: projects
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Project Updates methods
+
+  async createProjectUpdate(req, res, next) {
+    try {
+      const update = await ProjectService.createProjectUpdate(
+        req.params.projectId,
+        {
+          ...req.body,
+          author_id: req.user.id
+        }
+      );
+      res.status(201).json({
+        success: true,
+        data: update
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getProjectUpdates(req, res, next) {
+    try {
+      const updates = await ProjectService.getProjectUpdates(req.params.projectId);
+      res.json({
+        success: true,
+        data: updates
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getProjectUpdate(req, res, next) {
+    try {
+      const update = await ProjectService.getProjectUpdateById(
+        req.params.projectId,
+        req.params.updateId
+      );
+      res.json({
+        success: true,
+        data: update
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateProjectUpdate(req, res, next) {
+    try {
+      const update = await ProjectService.updateProjectUpdate(
+        req.params.projectId,
+        req.params.updateId,
+        req.body
+      );
+      res.json({
+        success: true,
+        data: update
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteProjectUpdate(req, res, next) {
+    try {
+      await ProjectService.deleteProjectUpdate(
+        req.params.projectId,
+        req.params.updateId
+      );
+      res.json({
+        success: true,
+        message: 'Project update deleted successfully'
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new ProjectController(); 

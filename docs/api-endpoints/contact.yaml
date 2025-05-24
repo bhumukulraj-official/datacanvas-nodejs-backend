@@ -1,0 +1,63 @@
+paths:
+  /contact:
+    post:
+      tags: [Contact]
+      summary: Send a contact form message
+      description: Submit contact information and message to be processed by the system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, subject, message]
+              properties:
+                name:
+                  type: string
+                  example: "John Doe"
+                  description: Sender's full name
+                email:
+                  type: string
+                  format: email
+                  example: "john.doe@example.com"
+                  description: Sender's email address
+                subject:
+                  type: string
+                  example: "Project Inquiry"
+                  description: Subject of the message
+                message:
+                  type: string
+                  example: "I'm interested in discussing a potential collaboration on your latest project."
+                  description: The main content of the message
+      responses:
+        200:
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Your message has been sent successfully"
+        400:
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Validation error"
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field:
+                          type: string
+                          example: "email"
+                        message:
+                          type: string
+                          example: "Must be a valid email address" 

@@ -84,6 +84,16 @@ validation.schemas.auth = {
   refreshToken: Joi.object({
     refreshToken: Joi.string().required()
   }),
+  verifyEmail: Joi.object({
+    token: Joi.string().required()
+  }),
+  resendVerification: Joi.object({
+    email: Joi.string().email().required()
+  }),
+  changePassword: Joi.object({
+    currentPassword: Joi.string().required(),
+    newPassword: Joi.string().min(8).required()
+  }),
   requestPasswordReset: Joi.object({
     email: Joi.string().email().required()
   }),
@@ -124,7 +134,19 @@ validation.schemas.project = {
     title: Joi.string(),
     description: Joi.string(),
     status: Joi.string().valid('draft', 'published', 'archived')
-  })
+  }),
+  projectUpdate: {
+    create: Joi.object({
+      title: Joi.string().max(200).required(),
+      content: Joi.string().required(),
+      is_featured: Joi.boolean().default(false)
+    }),
+    update: Joi.object({
+      title: Joi.string().max(200),
+      content: Joi.string(),
+      is_featured: Joi.boolean()
+    })
+  }
 };
 
 validation.schemas.profile = {
@@ -176,6 +198,16 @@ validation.schemas.payment = {
     invoice_id: Joi.string().required(),
     amount: Joi.number().positive().required(),
     payment_method: Joi.string().required()
+  })
+};
+
+validation.schemas.contact = {
+  submit: Joi.object({
+    name: Joi.string().min(2).max(100).required(),
+    email: Joi.string().email().required(),
+    subject: Joi.string().min(3).max(200).required(),
+    message: Joi.string().min(10).max(5000).required(),
+    recaptchaToken: Joi.string().optional()
   })
 };
 

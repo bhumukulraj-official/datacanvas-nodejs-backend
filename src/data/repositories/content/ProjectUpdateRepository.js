@@ -13,6 +13,13 @@ class ProjectUpdateRepository extends BaseRepository {
     });
   }
 
+  async findByProjectId(projectId) {
+    return this.model.findAll({
+      where: { project_id: projectId },
+      order: [['created_at', 'DESC']]
+    });
+  }
+
   async markAsViewed(updateId) {
     return this.update(updateId, { client_viewed_at: new Date() });
   }
