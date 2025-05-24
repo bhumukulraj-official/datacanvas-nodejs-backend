@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class PaymentTransaction extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       invoice_id: DataTypes.INTEGER,
       gateway_id: DataTypes.INTEGER,

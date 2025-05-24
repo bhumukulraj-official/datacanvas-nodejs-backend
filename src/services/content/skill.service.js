@@ -1,9 +1,11 @@
-const { SkillRepository } = require('../../../data/repositories/content');
+const { SkillRepository } = require('../../data/repositories/content');
 const { CustomError } = require('../../utils/error.util');
+const logger = require('../../utils/logger.util');
 
 class SkillService {
   constructor() {
     this.skillRepo = new SkillRepository();
+    logger.info('SkillService initialized with repository');
   }
 
   async getHighlightedSkills() {

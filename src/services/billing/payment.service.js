@@ -1,4 +1,4 @@
-const { PaymentRepository, PaymentTransactionRepository, PaymentProviderRepository } = require('../../../data/repositories/billing');
+const { PaymentRepository, PaymentTransactionRepository, PaymentProviderRepository } = require('../../data/repositories/billing');
 const { CustomError } = require('../../utils/error.util');
 
 class PaymentService {

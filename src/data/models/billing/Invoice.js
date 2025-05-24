@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class Invoice extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       uuid: {
         type: DataTypes.UUID,
@@ -83,7 +83,7 @@ module.exports = class Invoice extends BaseModel {
         { fields: ['uuid'] },
         { 
           name: 'idx_invoices_created_at_brin',
-          fields: [sequelize.literal('created_at')],
+          fields: ['created_at'],
           using: 'brin'
         },
         { 

@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class RevenueReport extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       report_date: {
         type: DataTypes.DATEONLY,

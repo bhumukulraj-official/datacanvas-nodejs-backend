@@ -3,16 +3,18 @@ const { redis } = require('../../config');
 const { rateLimit: rateLimitConfig } = require('../../config/security');
 const { CustomError } = require('../../utils/error.util');
 
-const redisStore = {
-  init: rateLimitConfig,
-  get: async (key) => {
-    const count = await redis.get(key);
-    return count ? parseInt(count) : 0;
+// Correct import for RedisStore
+const RedisStore = require('rate-limit-redis').default;
+
+const redisStore = new RedisStore({
+  sendCommand: (...args) => {
+    console.log('Redis command:', args);
+    return redis.client.sendCommand(args);
   },
-  increment: (key) => redis.incr(key),
-  decrement: (key) => redis.decr(key),
-  resetKey: (key) => redis.del(key)
-};
+  prefix: 'rl:'
+});
+
+console.log('RedisStore initialized:', redisStore);
 
 const apiLimiter = rateLimit({
   windowMs: rateLimitConfig.windowMs,

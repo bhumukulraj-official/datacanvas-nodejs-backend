@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { apiKeyController } = require('../../controllers/auth');
+const { ApiKeyController } = require('../../controllers/auth');
 const { authenticate, authorize } = require('../../middlewares/auth.middleware');
-const { validate } = require('../../middlewares/validation.middleware');
+const validate = require('../../middlewares/validation.middleware');
 const { schemas } = require('../../../utils/validation.util');
 
 router.use(authenticate);
@@ -10,16 +10,16 @@ router.use(authorize(['admin']));
 
 router.post('/',
   validate(schemas.apiKey.create, 'body'),
-  apiKeyController.createApiKey
+  ApiKeyController.createApiKey
 );
 
 router.put('/:keyId/rotate',
   validate(schemas.apiKey.rotate, 'params'),
-  apiKeyController.rotateApiKey
+  ApiKeyController.rotateApiKey
 );
 
 router.get('/',
-  apiKeyController.listApiKeys
+  ApiKeyController.listApiKeys
 );
 
 module.exports = router; 

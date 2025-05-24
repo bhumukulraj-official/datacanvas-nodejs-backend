@@ -1,9 +1,12 @@
 const BaseRepository = require('../BaseRepository');
 const { ProjectClientAssignment } = require('../../models');
+const { CustomError } = require('../../../utils/error.util');
+const logger = require('../../../utils/logger.util');
 
 class ProjectClientAssignmentRepository extends BaseRepository {
   constructor() {
     super(ProjectClientAssignment);
+    logger.info('Initializing ProjectClientAssignmentRepository');
   }
 
   async getActiveAssignments(projectId) {

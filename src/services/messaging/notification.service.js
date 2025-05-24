@@ -1,4 +1,4 @@
-const { NotificationRepository } = require('../../../data/repositories/messaging');
+const { NotificationRepository } = require('../../data/repositories/messaging');
 const { CustomError } = require('../../utils/error.util');
 
 class NotificationService {

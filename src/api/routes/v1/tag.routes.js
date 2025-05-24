@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { TagController } = require('../../controllers/content');
 const { authenticate, authorize } = require('../../middlewares/auth.middleware');
-const { validate } = require('../../middlewares/validation.middleware');
+const validate = require('../../middlewares/validation.middleware');
 const { schemas } = require('../../../utils/validation.util');
 
 router.get('/', TagController.searchTags);

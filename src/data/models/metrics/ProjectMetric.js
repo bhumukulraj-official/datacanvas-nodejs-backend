@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class ProjectMetric extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       project_id: {
         type: DataTypes.INTEGER,

@@ -60,6 +60,15 @@ services:
     volumes:
       - minio_data:/data
 
+  smtp:
+    image: maildev/maildev
+    ports:
+      - "1080:1080"   # Web interface
+      - "1025:1025"   # SMTP port
+    environment:
+      - MAILDEV_INCOMING_USER=admin
+      - MAILDEV_INCOMING_PASS=admin
+
 volumes:
   postgres_data:
   minio_data: 

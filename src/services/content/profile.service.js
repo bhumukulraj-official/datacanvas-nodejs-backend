@@ -1,9 +1,16 @@
-const { ProfileRepository } = require('../../../data/repositories/content');
+const { ProfileRepository } = require('../../data/repositories/content');
 const { CustomError } = require('../../utils/error.util');
+const logger = require('../../utils/logger.util');
 
 class ProfileService {
   constructor() {
-    this.profileRepo = new ProfileRepository();
+    try {
+      this.profileRepo = new ProfileRepository();
+      logger.info('ProfileService initialized successfully');
+    } catch (error) {
+      logger.error('Error initializing ProfileService:', error);
+      throw error;
+    }
   }
 
   async getProfile(userId) {

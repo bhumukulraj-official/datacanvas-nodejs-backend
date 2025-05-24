@@ -1,9 +1,8 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
 
 module.exports = class ApiKey extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       key: DataTypes.STRING(64),
       key_hash: DataTypes.STRING(255),

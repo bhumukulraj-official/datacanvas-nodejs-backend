@@ -1,6 +1,6 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 /**
  * WebhookHandler Model
@@ -10,7 +10,7 @@ const sequelize = require('../../../config/database');
  * to the messaging schema before using this model.
  */
 module.exports = class WebhookHandler extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       event_type: {
         type: DataTypes.STRING(50),

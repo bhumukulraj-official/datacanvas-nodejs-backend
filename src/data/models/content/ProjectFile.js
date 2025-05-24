@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class ProjectFile extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       file_url: {
         type: DataTypes.STRING(255),

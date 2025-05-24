@@ -1,4 +1,4 @@
-const { UserRepository } = require('../../../data/repositories/auth');
+const UserRepository = require('../../data/repositories/auth/UserRepository');
 const passwordUtil = require('../../utils/password.util');
 const { DuplicateResourceError } = require('../../utils/error.util');
 

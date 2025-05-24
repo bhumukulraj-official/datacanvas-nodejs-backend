@@ -7,7 +7,7 @@ const {
   WebhookController
 } = require('../../controllers/billing');
 const { authenticate, authorize } = require('../../middlewares/auth.middleware');
-const { validate } = require('../../middlewares/validation.middleware');
+const validate = require('../../middlewares/validation.middleware');
 const { schemas } = require('../../../utils/validation.util');
 
 // Public webhook endpoint

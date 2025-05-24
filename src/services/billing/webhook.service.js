@@ -1,4 +1,4 @@
-const { WebhookRepository } = require('../../../data/repositories/billing');
+const { WebhookRepository } = require('../../data/repositories/billing');
 const { CustomError } = require('../../utils/error.util');
 
 class WebhookService {

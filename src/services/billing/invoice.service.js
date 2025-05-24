@@ -1,11 +1,23 @@
-const { InvoiceRepository, InvoiceItemRepository, InvoiceStatusRepository } = require('../../../data/repositories/billing');
+const logger = require('../../utils/logger.util');
+const { InvoiceRepository, InvoiceItemRepository, InvoiceStatusRepository } = require('../../data/repositories/billing');
 const { CustomError, ResourceNotFoundError } = require('../../utils/error.util');
+
+// Add initialization logging
+logger.debug('Billing repositories loaded', {
+  repositories: Object.keys(require('../../data/repositories/billing'))
+});
 
 class InvoiceService {
   constructor() {
-    this.invoiceRepo = new InvoiceRepository();
-    this.itemRepo = new InvoiceItemRepository();
-    this.statusRepo = new InvoiceStatusRepository();
+    try {
+      this.invoiceRepo = new InvoiceRepository();
+      this.itemRepo = new InvoiceItemRepository();
+      this.statusRepo = new InvoiceStatusRepository();
+      logger.info('InvoiceService initialized with repositories');
+    } catch (error) {
+      logger.error('Error initializing InvoiceService repositories:', error);
+      throw error;
+    }
   }
 
   async createInvoice(invoiceData, items) {

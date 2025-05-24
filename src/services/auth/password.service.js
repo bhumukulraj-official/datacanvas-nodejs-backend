@@ -1,5 +1,5 @@
-const { UserRepository } = require('../../../data/repositories/auth');
-const { EmailVerificationTokenRepository } = require('../../../data/repositories/auth');
+const UserRepository = require('../../data/repositories/auth/UserRepository');
+const EmailVerificationTokenRepository = require('../../data/repositories/auth/EmailVerificationTokenRepository');
 const passwordUtil = require('../../utils/password.util');
 const { CustomError } = require('../../utils/error.util');
 

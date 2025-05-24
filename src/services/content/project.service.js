@@ -1,11 +1,25 @@
-const { ProjectRepository } = require('../../../data/repositories/content');
-const { ProjectStatusRepository } = require('../../../data/repositories/content');
+const { ProjectRepository } = require('../../data/repositories/content');
+const { ProjectStatusRepository } = require('../../data/repositories/content');
+const { TagRepository } = require('../../data/repositories/content');
 const { CustomError, ResourceNotFoundError } = require('../../utils/error.util');
+const logger = require('../../utils/logger.util');
 
 class ProjectService {
   constructor() {
-    this.projectRepo = new ProjectRepository();
-    this.statusRepo = new ProjectStatusRepository();
+    try {
+      this.projectRepo = new ProjectRepository();
+      this.statusRepo = new ProjectStatusRepository();
+      this.tagRepo = new TagRepository();
+      logger.info('ProjectService initialized with repositories');
+      logger.debug('Repositories loaded:', {
+        projectRepo: !!this.projectRepo,
+        statusRepo: !!this.statusRepo,
+        tagRepo: !!this.tagRepo
+      });
+    } catch (error) {
+      logger.error('Error initializing ProjectService repositories:', error);
+      throw error;
+    }
   }
 
   async createProject(projectData) {

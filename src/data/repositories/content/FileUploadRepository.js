@@ -1,10 +1,13 @@
 const BaseRepository = require('../BaseRepository');
 const { FileUpload } = require('../../models');
 const { Op } = require('sequelize');
+const { CustomError } = require('../../../utils/error.util');
+const logger = require('../../../utils/logger.util');
 
 class FileUploadRepository extends BaseRepository {
   constructor() {
     super(FileUpload);
+    logger.info('FileUploadRepository initialized');
   }
 
   async getByUuid(uuid) {
@@ -56,6 +59,15 @@ class FileUploadRepository extends BaseRepository {
 
   async updateVirusScanStatus(fileId, status) {
     return this.update(fileId, { virus_scan_status: status });
+  }
+
+  async create(fileData) {
+    try {
+      return await super.create(fileData);
+    } catch (error) {
+      logger.error('Error creating file upload:', error);
+      throw new CustomError('Database error creating file record', 500);
+    }
   }
 }
 

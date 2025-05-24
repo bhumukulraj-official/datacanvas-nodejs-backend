@@ -6,6 +6,7 @@ const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
 const path = require('path');
 const fs = require('fs');
+const routes = require('./api/routes/v1');
 
 // Load environment variables
 require('dotenv').config();
@@ -42,8 +43,8 @@ app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
-// API Routes (to be implemented)
-// app.use('/api/v1', routes);
+// API Routes
+routes(app);
 
 // API Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));

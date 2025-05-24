@@ -1,24 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const { projectController } = require('../../controllers/content');
+const { ProjectController } = require('../../controllers/content');
 const { authenticate } = require('../../middlewares/auth.middleware');
-const { validate } = require('../../middlewares/validation.middleware');
+const validate = require('../../middlewares/validation.middleware');
 const { schemas } = require('../../../utils/validation.util');
 
-router.get('/featured', projectController.getFeaturedProjects);
-router.get('/:id', projectController.getProject);
+router.get('/featured', ProjectController.getFeaturedProjects);
+router.get('/:id', ProjectController.getProject);
 
 // Authenticated routes
 router.use(authenticate);
 
 router.post('/',
   validate(schemas.project.create, 'body'),
-  projectController.createProject
+  ProjectController.createProject
 );
 
 router.put('/:id',
   validate(schemas.project.update, 'body'),
-  projectController.updateProject
+  ProjectController.updateProject
 );
 
 module.exports = router; 

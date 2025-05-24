@@ -1,5 +1,5 @@
-const { UserRepository } = require('../../../data/repositories/auth');
-const { RefreshTokenRepository } = require('../../../data/repositories/auth');
+const UserRepository = require('../../data/repositories/auth/UserRepository');
+const RefreshTokenRepository = require('../../data/repositories/auth/RefreshTokenRepository');
 const passwordUtil = require('../../utils/password.util');
 const jwtUtil = require('../../utils/jwt.util');
 const { CustomError, InvalidCredentialsError, TokenExpiredError } = require('../../utils/error.util');

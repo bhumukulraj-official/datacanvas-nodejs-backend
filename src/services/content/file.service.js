@@ -1,21 +1,25 @@
-const { FileUploadRepository } = require('../../../data/repositories/content');
+const { FileUploadRepository } = require('../../data/repositories/content');
 const { s3 } = require('../../config');
 const { CustomError } = require('../../utils/error.util');
+const logger = require('../../utils/logger.util');
 
 class FileService {
   constructor() {
-    this.fileRepo = new FileUploadRepository();
+    this.fileUploadRepo = new FileUploadRepository();
+    logger.info('FileService initialized with repositories');
   }
 
   async createFileRecord(fileData) {
-    return this.fileRepo.create({
-      ...fileData,
-      virus_scan_status: 'pending'
-    });
+    try {
+      return await this.fileUploadRepo.create(fileData);
+    } catch (error) {
+      logger.error('Error creating file record:', error);
+      throw new CustomError('Failed to create file record', 500);
+    }
   }
 
   async getFileByUuid(uuid) {
-    const file = await this.fileRepo.getByUuid(uuid);
+    const file = await this.fileUploadRepo.getByUuid(uuid);
     if (!file) {
       throw new CustomError('File not found', 404);
     }
@@ -33,12 +37,12 @@ class FileService {
   }
 
   async markFileAsClean(fileId) {
-    return this.fileRepo.updateVirusScanStatus(fileId, 'clean');
+    return this.fileUploadRepo.updateVirusScanStatus(fileId, 'clean');
   }
 
   async deleteFile(fileId) {
     const file = await this.getFileByUuid(fileId);
-    await this.fileRepo.markAsDeleted(fileId);
+    await this.fileUploadRepo.markAsDeleted(fileId);
     
     const command = new DeleteObjectCommand({
       Bucket: s3.getBucket(file.is_public),

@@ -1,10 +1,12 @@
-const { MessageRepository, MessageAttachmentRepository } = require('../../../data/repositories/messaging');
+const { MessageRepository, MessageAttachmentRepository, ConversationRepository, ConversationParticipantRepository } = require('../../data/repositories/messaging');
 const { CustomError } = require('../../utils/error.util');
 
 class MessageService {
   constructor() {
     this.messageRepo = new MessageRepository();
     this.attachmentRepo = new MessageAttachmentRepository();
+    this.convoRepo = new ConversationRepository();
+    this.participantRepo = new ConversationParticipantRepository();
   }
 
   async sendMessage(senderId, convoId, content, attachments = []) {

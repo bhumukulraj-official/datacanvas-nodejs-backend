@@ -1,4 +1,4 @@
-const { WebsocketConnectionRepository, WebsocketMessageRepository } = require('../../../data/repositories/messaging');
+const { WebsocketConnectionRepository, WebsocketMessageRepository } = require('../../data/repositories/messaging');
 const { CustomError } = require('../../utils/error.util');
 
 class WebsocketService {

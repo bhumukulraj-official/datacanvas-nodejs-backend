@@ -1,4 +1,4 @@
-const { EncryptionKeyRepository, EncryptionKeyAuditRepository } = require('../../../data/repositories/billing');
+const { EncryptionKeyRepository, EncryptionKeyAuditRepository } = require('../../data/repositories/billing');
 const { CustomError } = require('../../utils/error.util');
 const crypto = require('crypto');
 

@@ -7,6 +7,7 @@ const providers = {
   SENDGRID: 'sendgrid',
   MAILGUN: 'mailgun',
   AWS_SES: 'ses',
+  MAILJET: 'mailjet',
 };
 
 // Default provider
@@ -56,6 +57,17 @@ switch (defaultProvider) {
         accessKeyId: process.env.AWS_SES_ACCESS_KEY,
         secretAccessKey: process.env.AWS_SES_SECRET_KEY,
         region: process.env.AWS_SES_REGION || 'us-east-1',
+      }
+    });
+    break;
+  
+  case providers.MAILJET:
+    transporter = nodemailer.createTransport({
+      host: 'in-v3.mailjet.com',
+      port: 587,
+      auth: {
+        user: process.env.MAILJET_API_KEY,
+        pass: process.env.MAILJET_API_SECRET
       }
     });
     break;

@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class ErrorColorMapping extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       error_category: {
         type: DataTypes.STRING(50),

@@ -1,4 +1,4 @@
-const { RefreshTokenRepository } = require('../../../data/repositories/auth');
+const RefreshTokenRepository = require('../../data/repositories/auth/RefreshTokenRepository');
 const jwtUtil = require('../../utils/jwt.util');
 const { redis } = require('../../config');
 

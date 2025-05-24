@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class Message extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       uuid: {
         type: DataTypes.UUID,

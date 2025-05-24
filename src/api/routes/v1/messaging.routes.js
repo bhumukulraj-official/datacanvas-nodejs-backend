@@ -7,7 +7,7 @@ const {
   WebsocketController
 } = require('../../controllers/messaging');
 const { authenticate } = require('../../middlewares/auth.middleware');
-const { validate } = require('../../middlewares/validation.middleware');
+const validate = require('../../middlewares/validation.middleware');
 const { schemas } = require('../../../utils/validation.util');
 
 // Authenticate all messaging routes

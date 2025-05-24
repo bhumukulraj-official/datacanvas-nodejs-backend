@@ -1,9 +1,9 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 module.exports = class EncryptionKey extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       version: {
         type: DataTypes.INTEGER,

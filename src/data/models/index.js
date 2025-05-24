@@ -1,6 +1,27 @@
 const fs = require('fs');
 const path = require('path');
-const sequelize = require('../../config/database');
+const { Sequelize } = require('sequelize');
+const config = require('../../config/database');
+
+// Determine environment
+const env = process.env.NODE_ENV || 'development';
+const dbConfig = config[env];
+
+// Create Sequelize instance
+const sequelize = new Sequelize(
+  dbConfig.database,
+  dbConfig.username,
+  dbConfig.password,
+  {
+    host: dbConfig.host,
+    port: dbConfig.port,
+    dialect: dbConfig.dialect,
+    logging: dbConfig.logging,
+    define: dbConfig.define,
+    pool: dbConfig.pool,
+    dialectOptions: dbConfig.dialectOptions
+  }
+);
 
 const models = {};
 
@@ -20,9 +41,9 @@ function loadModelsFromDir(dir) {
         
         // Check if it's a valid model class
         if (ModelClass && typeof ModelClass === 'function' && ModelClass.prototype) {
-          // Initialize the model
+          // Initialize the model with the sequelize instance
           if (typeof ModelClass.init === 'function') {
-            ModelClass.init();
+            ModelClass.init(sequelize);
           }
           
           // Use the class name as the model name

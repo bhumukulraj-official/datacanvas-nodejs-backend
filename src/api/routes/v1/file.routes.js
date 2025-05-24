@@ -1,17 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { fileController } = require('../../controllers/content');
+const { FileController } = require('../../controllers/content');
 const { authenticate } = require('../../middlewares/auth.middleware');
 const { processUpload } = require('../../middlewares/upload.middleware');
 
-router.get('/:fileId', fileController.getFile);
+router.get('/:fileId', FileController.getFile);
 
 // Authenticated routes
 router.use(authenticate);
 
 router.post('/upload',
   processUpload('file'),
-  fileController.uploadFile
+  FileController.uploadFile
 );
 
 module.exports = router; 

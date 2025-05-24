@@ -1,11 +1,11 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
+
 
 // This model represents a view created in migration 20240901000047-create-message-api-support.js
 // It doesn't have its own table but maps to views in public_api schema
 module.exports = class MessageApiSupport extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       endpoint: {
         type: DataTypes.STRING,

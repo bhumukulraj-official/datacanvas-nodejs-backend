@@ -1,4 +1,4 @@
-const { ApiKeyRepository } = require('../../../data/repositories/auth');
+const ApiKeyRepository = require('../../data/repositories/auth/ApiKeyRepository');
 const passwordUtil = require('../../utils/password.util');
 
 class ApiKeyService {

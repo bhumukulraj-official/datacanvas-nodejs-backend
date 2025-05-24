@@ -1,10 +1,17 @@
-const { TagRepository } = require('../../../data/repositories/content');
+const { TagRepository } = require('../../data/repositories/content');
 const { validation } = require('../../utils/validation.util');
 const { CustomError } = require('../../utils/error.util');
+const logger = require('../../utils/logger.util');
 
 class TagService {
   constructor() {
-    this.tagRepo = new TagRepository();
+    try {
+      this.tagRepo = new TagRepository();
+      logger.info('TagService initialized with repository');
+    } catch (error) {
+      logger.error('Error initializing TagService repositories:', error);
+      throw error;
+    }
   }
 
   async createTag(tagData) {

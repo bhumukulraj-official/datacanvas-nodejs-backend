@@ -1,4 +1,5 @@
-const { ConversationRepository, ConversationParticipantRepository } = require('../../../data/repositories/messaging');
+const { ConversationRepository } = require('../../data/repositories/messaging');
+const { ConversationParticipantRepository } = require('../../data/repositories/messaging');
 const { CustomError, ResourceNotFoundError } = require('../../utils/error.util');
 
 class ConversationService {

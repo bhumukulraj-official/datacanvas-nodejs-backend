@@ -1,5 +1,6 @@
-const { ClientInvitationRepository } = require('../../../data/repositories/auth');
+const ClientInvitationRepository = require('../../data/repositories/auth/ClientInvitationRepository');
 const { CustomError } = require('../../utils/error.util');
+const passwordUtil = require('../../utils/password.util');
 
 class ClientInvitationService {
   constructor() {

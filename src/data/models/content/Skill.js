@@ -1,9 +1,8 @@
 const { DataTypes } = require('sequelize');
 const BaseModel = require('../BaseModel');
-const sequelize = require('../../../config/database');
 
 module.exports = class Skill extends BaseModel {
-  static init() {
+  static init(sequelize) {
     return super.init({
       name: DataTypes.STRING(100),
       category: DataTypes.STRING(50),
@@ -25,8 +24,8 @@ module.exports = class Skill extends BaseModel {
       indexes: [
         { 
           name: 'idx_skills_search',
-          fields: [sequelize.literal("to_tsvector('english', name || ' ' || COALESCE(category, '') || ' ' || COALESCE(description, ''))")],
-          using: 'gin'
+          using: 'gin',
+          fields: ['name', 'category', 'description']
         }
       ]
     });

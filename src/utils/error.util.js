@@ -198,6 +198,15 @@ const handleSequelizeError = (error) => {
   );
 };
 
+class CustomError extends Error {
+  constructor(message, statusCode = 500, code = 'CUSTOM_ERROR', data = {}) {
+    super(message);
+    this.statusCode = statusCode;
+    this.code = code;
+    this.data = data;
+  }
+}
+
 module.exports = {
   AppError,
   BadRequestError,
@@ -217,4 +226,5 @@ module.exports = {
   ResourceNotFoundError,
   DuplicateResourceError,
   handleSequelizeError,
+  CustomError,
 }; 
