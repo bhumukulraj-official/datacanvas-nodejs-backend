@@ -1,0 +1,166 @@
+paths:
+  /tags:
+    get:
+      tags: [Tags]
+      summary: Search tags
+      description: Search for tags based on a query string
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Search query string
+      responses:
+        200:
+          description: List of matching tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tag'
+    
+    post:
+      tags: [Tags]
+      summary: Create a new tag
+      description: Create a new tag (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Tag name
+                category:
+                  type: string
+                  description: Tag category
+                slug:
+                  type: string
+                  description: URL-friendly version of the name
+      responses:
+        201:
+          description: Tag created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Tag'
+        400:
+          description: Invalid request
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+
+  /tags/technology:
+    get:
+      tags: [Tags]
+      summary: Get technology tags
+      description: Retrieves all tags categorized as technology
+      responses:
+        200:
+          description: List of technology tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Tag'
+
+  /tags/{id}:
+    put:
+      tags: [Tags]
+      summary: Update a tag
+      description: Update an existing tag (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Tag name
+                category:
+                  type: string
+                  description: Tag category
+                slug:
+                  type: string
+                  description: URL-friendly version of the name
+      responses:
+        200:
+          description: Tag updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Tag'
+        400:
+          description: Invalid request
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+        404:
+          description: Tag not found
+
+components:
+  schemas:
+    Tag:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        category:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time 

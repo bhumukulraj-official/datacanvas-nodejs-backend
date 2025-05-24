@@ -9,7 +9,11 @@ class ProjectRepository extends BaseRepository {
 
   async getFeaturedProjects() {
     return this.model.findAll({
-      where: { is_featured: true },
+      where: { 
+        is_featured: true,
+        is_deleted: false 
+      },
+      include: ['ProjectStatus'],
       order: [['created_at', 'DESC']]
     });
   }

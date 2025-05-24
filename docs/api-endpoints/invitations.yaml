@@ -1,0 +1,101 @@
+paths:
+  /invitations:
+    post:
+      tags: [Invitations]
+      summary: Create client invitation
+      description: Creates a new invitation for a client (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Email address of the invitee
+      responses:
+        201:
+          description: Invitation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Invitation'
+        400:
+          description: Invalid request - email already invited
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+
+  /invitations/accept:
+    post:
+      tags: [Invitations]
+      summary: Accept invitation
+      description: Accepts an invitation using a token
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Invitation token
+      responses:
+        200:
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        400:
+          description: Invalid or expired token
+        401:
+          description: Unauthorized
+        404:
+          description: Invitation not found
+
+components:
+  schemas:
+    Invitation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        token:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, accepted, expired, revoked]
+        senderId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time 

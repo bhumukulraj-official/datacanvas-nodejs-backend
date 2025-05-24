@@ -19,6 +19,8 @@ tags:
     description: User authentication and authorization
   - name: Users
     description: User management
+  - name: Profiles
+    description: User profile management
   - name: Projects
     description: Project management
   - name: Messaging
@@ -33,6 +35,12 @@ tags:
     description: Tag management
   - name: Contact
     description: Contact form submission
+  - name: API Keys
+    description: API key management
+  - name: Invitations
+    description: Client invitation management
+  - name: Search
+    description: Search functionality
 
 paths:
   /health:
@@ -44,6 +52,9 @@ paths:
   /auth/refresh-token:
     $ref: './api-endpoints/auth.yaml#/paths/~1auth~1refresh-token'
     
+  /auth/logout:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1logout'
+    
   /auth/verify-email:
     $ref: './api-endpoints/auth.yaml#/paths/~1auth~1verify-email'
     
@@ -53,8 +64,158 @@ paths:
   /auth/change-password:
     $ref: './api-endpoints/auth.yaml#/paths/~1auth~1change-password'
     
+  /auth/request-password-reset:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1request-password-reset'
+    
+  /auth/reset-password:
+    $ref: './api-endpoints/auth.yaml#/paths/~1auth~1reset-password'
+    
+  /users/register:
+    $ref: './api-endpoints/users.yaml#/paths/~1users~1register'
+    
+  /users/profile:
+    $ref: './api-endpoints/users.yaml#/paths/~1users~1profile'
+    
   /contact:
     $ref: './api-endpoints/contact.yaml#/paths/~1contact'
+
+  /projects:
+    $ref: './api-endpoints/projects.yaml#/paths/~1projects'
+    
+  /projects/featured:
+    $ref: './api-endpoints/projects.yaml#/paths/~1projects~1featured'
+    
+  /projects/all:
+    $ref: './api-endpoints/projects.yaml#/paths/~1projects~1all'
+    
+  /projects/{projectId}/updates:
+    $ref: './api-endpoints/projects.yaml#/paths/~1projects~1{projectId}~1updates'
+    
+  /projects/{projectId}/updates/{updateId}:
+    $ref: './api-endpoints/projects.yaml#/paths/~1projects~1{projectId}~1updates~1{updateId}'
+    
+  /client/projects/{uuid}/updates:
+    $ref: './api-endpoints/projects.yaml#/paths/~1client~1projects~1{uuid}~1updates'
+    
+  /client/projects/updates/{uuid}/viewed:
+    $ref: './api-endpoints/projects.yaml#/paths/~1client~1projects~1updates~1{uuid}~1viewed'
+
+  # Files endpoints
+  /files/{fileId}:
+    $ref: './api-endpoints/files.yaml#/paths/~1files~1{fileId}'
+  
+  /files/upload:
+    $ref: './api-endpoints/files.yaml#/paths/~1files~1upload'
+
+  # Skills endpoints
+  /skills/highlighted:
+    $ref: './api-endpoints/skills.yaml#/paths/~1skills~1highlighted'
+  
+  /skills/category/{category}:
+    $ref: './api-endpoints/skills.yaml#/paths/~1skills~1category~1{category}'
+  
+  /skills/{id}/proficiency:
+    $ref: './api-endpoints/skills.yaml#/paths/~1skills~1{id}~1proficiency'
+
+  # Tags endpoints
+  /tags:
+    $ref: './api-endpoints/tags.yaml#/paths/~1tags'
+  
+  /tags/technology:
+    $ref: './api-endpoints/tags.yaml#/paths/~1tags~1technology'
+  
+  /tags/{id}:
+    $ref: './api-endpoints/tags.yaml#/paths/~1tags~1{id}'
+
+  # Profiles endpoints
+  /profiles/{userId}:
+    $ref: './api-endpoints/profiles.yaml#/paths/~1profiles~1{userId}'
+    
+  /profiles/social-links:
+    $ref: './api-endpoints/profiles.yaml#/paths/~1profiles~1social-links'
+
+  # API Keys endpoints
+  /api-keys:
+    $ref: './api-endpoints/apiKeys.yaml#/paths/~1api-keys'
+    
+  /api-keys/{keyId}/rotate:
+    $ref: './api-endpoints/apiKeys.yaml#/paths/~1api-keys~1{keyId}~1rotate'
+
+  # Invitations endpoints
+  /invitations:
+    $ref: './api-endpoints/invitations.yaml#/paths/~1invitations'
+    
+  /invitations/accept:
+    $ref: './api-endpoints/invitations.yaml#/paths/~1invitations~1accept'
+
+  # Search endpoints
+  /search/projects:
+    $ref: './api-endpoints/search.yaml#/paths/~1search~1projects'
+    
+  /search/index/project/{projectId}:
+    $ref: './api-endpoints/search.yaml#/paths/~1search~1index~1project~1{projectId}'
+
+  # Messaging endpoints
+  /messaging/conversations:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1conversations'
+    
+  /messaging/conversations/{id}:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1conversations~1{id}'
+    
+  /messaging/conversations/{id}/read:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1conversations~1{id}~1read'
+    
+  /messaging/conversations/{conversationId}/messages:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1conversations~1{conversationId}~1messages'
+    
+  /messaging/messages/{messageId}:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1messages~1{messageId}'
+    
+  /messaging/notifications:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1notifications'
+    
+  /messaging/notifications/{notificationId}/read:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1notifications~1{notificationId}~1read'
+    
+  /messaging/websocket/{connectionId}/messages:
+    $ref: './api-endpoints/messaging.yaml#/paths/~1messaging~1websocket~1{connectionId}~1messages'
+
+  # Billing endpoints
+  /billing/invoices:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1invoices'
+    
+  /billing/invoices/client/{clientId}:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1invoices~1client~1{clientId}'
+    
+  /billing/invoices/{id}:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1invoices~1{id}'
+    
+  /billing/invoices/{id}/status:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1invoices~1{id}~1status'
+    
+  /billing/payments:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1payments'
+    
+  /billing/payments/history/{clientId}:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1payments~1history~1{clientId}'
+    
+  /billing/encryption/rotate-key:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1encryption~1rotate-key'
+    
+  /billing/encryption/history/{version}:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1encryption~1history~1{version}'
+    
+  /billing/webhooks:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1webhooks'
+    
+  /billing/webhooks/retry:
+    $ref: './api-endpoints/billing.yaml#/paths/~1billing~1webhooks~1retry'
+    
+  /client/invoices:
+    $ref: './api-endpoints/billing.yaml#/paths/~1client~1invoices'
+    
+  /client/invoices/{uuid}/pay:
+    $ref: './api-endpoints/billing.yaml#/paths/~1client~1invoices~1{uuid}~1pay'
 
 components:
   schemas:

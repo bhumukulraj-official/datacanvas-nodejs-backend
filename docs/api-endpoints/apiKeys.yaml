@@ -1,0 +1,121 @@
+paths:
+  /api-keys:
+    post:
+      tags: [API Keys]
+      summary: Create API key
+      description: Creates a new API key for the authenticated user (admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: A descriptive name for the API key
+      responses:
+        201:
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ApiKey'
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+
+    get:
+      tags: [API Keys]
+      summary: List API keys
+      description: Lists all API keys for the authenticated user (admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApiKey'
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+
+  /api-keys/{keyId}/rotate:
+    put:
+      tags: [API Keys]
+      summary: Rotate API key
+      description: Rotates (regenerates) an existing API key (admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: API key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/ApiKey'
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+        404:
+          description: API key not found
+
+components:
+  schemas:
+    ApiKey:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        key:
+          type: string
+          description: Only returned when created or rotated
+        lastUsed:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time 

@@ -38,4 +38,539 @@ paths:
                     format: uuid
                   status:
                     type: string
-                    enum: [draft, sent, paid] 
+                    enum: [draft, sent, paid]
+
+  /billing/invoices/client/{clientId}:
+    get:
+      tags: [Billing]
+      summary: Get client invoices
+      description: Retrieves all invoices for a specific client
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Client invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+        404:
+          description: Client not found
+
+  /billing/invoices/{id}:
+    get:
+      tags: [Billing]
+      summary: Get invoice by ID
+      description: Retrieves an invoice with its items
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+        404:
+          description: Invoice not found
+
+  /billing/invoices/{id}/status:
+    put:
+      tags: [Billing]
+      summary: Update invoice status
+      description: Updates the status of an invoice
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [draft, sent, paid, overdue, cancelled]
+      responses:
+        200:
+          description: Invoice status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Invoice'
+        400:
+          description: Invalid status
+        404:
+          description: Invoice not found
+
+  /billing/payments:
+    post:
+      tags: [Billing]
+      summary: Process payment
+      description: Processes a payment for an invoice
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceId, amount, paymentMethod]
+              properties:
+                invoiceId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: number
+                  format: float
+                paymentMethod:
+                  type: string
+                  enum: [credit_card, bank_transfer, paypal, crypto]
+                paymentDetails:
+                  type: object
+      responses:
+        201:
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Payment'
+        400:
+          description: Invalid request
+        404:
+          description: Invoice not found
+
+  /billing/payments/history/{clientId}:
+    get:
+      tags: [Billing]
+      summary: Get payment history
+      description: Retrieves payment history for a specific client
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: clientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Payment'
+        404:
+          description: Client not found
+
+  /billing/encryption/rotate-key:
+    post:
+      tags: [Billing, Security]
+      summary: Rotate encryption key
+      description: Rotates the encryption key used for sensitive payment data
+      security:
+        - BearerAuth: []
+      responses:
+        201:
+          description: Encryption key rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: integer
+                      rotatedAt:
+                        type: string
+                        format: date-time
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+
+  /billing/encryption/history/{version}:
+    get:
+      tags: [Billing, Security]
+      summary: Get key history
+      description: Retrieves history for a specific encryption key version
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        200:
+          description: Key history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: integer
+                      createdAt:
+                        type: string
+                        format: date-time
+                      lastUsed:
+                        type: string
+                        format: date-time
+                      operations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            operation:
+                              type: string
+                            timestamp:
+                              type: string
+                              format: date-time
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+        404:
+          description: Key version not found
+
+  /billing/webhooks:
+    post:
+      tags: [Billing, Webhooks]
+      summary: Process webhook
+      description: Processes an incoming webhook from a payment provider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        200:
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        400:
+          description: Invalid webhook payload
+
+  /billing/webhooks/retry:
+    post:
+      tags: [Billing, Webhooks]
+      summary: Retry failed webhooks
+      description: Retries all failed webhook processing attempts
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Webhooks retry initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      retriedCount:
+                        type: integer
+                      successCount:
+                        type: integer
+        401:
+          description: Unauthorized
+        403:
+          description: Forbidden - admin access required
+
+  /client/invoices:
+    get:
+      tags: [Billing, Client]
+      summary: Get client invoices
+      description: Retrieves all invoices for the authenticated client
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status_code
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, paid, overdue, cancelled]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        200:
+          description: Client invoices list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      invoices:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Invoice'
+                      pagination:
+                        $ref: '#/components/schemas/Pagination'
+
+  /client/invoices/{uuid}/pay:
+    post:
+      tags: [Billing, Client]
+      summary: Process payment for an invoice
+      description: Process a payment for the specified invoice
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - payment_method
+                - amount
+              properties:
+                payment_method:
+                  type: string
+                  enum: [credit_card, bank_transfer, paypal, other]
+                payment_details:
+                  type: object
+                  properties:
+                    card_number:
+                      type: string
+                    expiry_date:
+                      type: string
+                    cvv:
+                      type: string
+                    account_number:
+                      type: string
+                    paypal_email:
+                      type: string
+                amount:
+                  type: number
+                  format: float
+                notes:
+                  type: string
+      responses:
+        200:
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      transaction_id:
+                        type: string
+                      status_code:
+                        type: string
+                        enum: [pending, completed, failed, refunded]
+                      payment_date:
+                        type: string
+                        format: date-time
+                      receipt_url:
+                        type: string
+                        format: uri
+                  message:
+                    type: string
+                    example: "Payment processed successfully"
+        404:
+          description: Invoice not found
+        400:
+          description: Validation error or invoice already paid
+
+components:
+  schemas:
+    Invoice:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        invoice_number:
+          type: string
+        amount:
+          type: number
+          format: float
+        tax:
+          type: number
+          format: float
+        status_code:
+          type: string
+          enum: [draft, sent, paid, overdue, cancelled]
+        issue_date:
+          type: string
+          format: date
+        due_date:
+          type: string
+          format: date
+        paid_date:
+          type: string
+          format: date
+        project:
+          type: object
+          properties:
+            uuid:
+              type: string
+              format: uuid
+            title:
+              type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              quantity:
+                type: number
+              unit_price:
+                type: number
+                format: float
+              amount:
+                type: number
+                format: float
+    
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: float
+        paymentMethod:
+          type: string
+        transactionId:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, failed, refunded]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    Pagination:
+      type: object
+      properties:
+        currentPage:
+          type: integer
+        totalPages:
+          type: integer
+        totalItems:
+          type: integer
+        itemsPerPage:
+          type: integer
+        hasNextPage:
+          type: boolean
+        hasPreviousPage:
+          type: boolean 

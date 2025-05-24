@@ -1,0 +1,98 @@
+paths:
+  /search/projects:
+    get:
+      tags: [Search]
+      summary: Search projects
+      description: Searches for projects based on a query string
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Search query string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        200:
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SearchResult'
+        400:
+          description: Invalid query
+
+  /search/index/project/{projectId}:
+    post:
+      tags: [Search]
+      summary: Index project
+      description: Indexes or reindexes a project for search (requires authentication)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Project indexed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Project indexed successfully"
+        401:
+          description: Unauthorized
+        404:
+          description: Project not found
+
+components:
+  schemas:
+    SearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [project, tag, skill, user]
+        title:
+          type: string
+        description:
+          type: string
+        highlights:
+          type: array
+          items:
+            type: string
+        score:
+          type: number
+          format: float
+        metadata:
+          type: object 

@@ -2,7 +2,7 @@ const { ProjectRepository } = require('../../data/repositories/content');
 const { ProjectStatusRepository } = require('../../data/repositories/content');
 const { ProjectUpdateRepository } = require('../../data/repositories/content');
 const { TagRepository } = require('../../data/repositories/content');
-const { CustomError, ResourceNotFoundError } = require('../../utils/error.util');
+const { ResourceNotFoundError, CustomError } = require('../../utils/error.util');
 const logger = require('../../utils/logger.util');
 
 class ProjectService {
@@ -50,8 +50,17 @@ class ProjectService {
   }
 
   async getFeaturedProjects() {
-    const projects = await this.projectRepo.getFeaturedProjects();
-    return Promise.all(projects.map(p => this._enrichProject(p)));
+    try {
+      const projects = await this.projectRepo.getFeaturedProjects();
+      if (!projects || projects.length === 0) {
+        return [];
+      }
+      return Promise.all(projects.map(p => this._enrichProject(p)));
+    } catch (error) {
+      logger.error('Error fetching featured projects:', error);
+      // Return empty array instead of throwing to prevent 500 error
+      return [];
+    }
   }
   
   async getAllProjects() {

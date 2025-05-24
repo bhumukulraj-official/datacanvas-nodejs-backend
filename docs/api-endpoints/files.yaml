@@ -1,0 +1,91 @@
+paths:
+  /files/{fileId}:
+    get:
+      tags: [Files]
+      summary: Get file by ID
+      description: Retrieves a file by its UUID
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: File details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/File'
+        404:
+          description: File not found
+
+  /files/upload:
+    post:
+      tags: [Files]
+      summary: Upload a file
+      description: Upload a new file to the system
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        201:
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/File'
+        400:
+          description: Invalid request
+        401:
+          description: Unauthorized
+
+components:
+  schemas:
+    File:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        fileUrl:
+          type: string
+          format: uri
+        fileSize:
+          type: integer
+          description: Size in bytes
+        mimeType:
+          type: string
+        uploadedBy:
+          type: string
+          format: uuid
+          description: User ID who uploaded the file
+        createdAt:
+          type: string
+          format: date-time 

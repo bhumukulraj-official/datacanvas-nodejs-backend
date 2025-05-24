@@ -33,23 +33,389 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/User'
-
-  /messaging/messages:
-    post:
+    
+    get:
       tags: [Messaging]
-      summary: Send message
+      summary: Get user conversations
+      description: Retrieves all conversations for the authenticated user
       security:
         - BearerAuth: []
+      responses:
+        200:
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+
+  /messaging/conversations/{id}:
+    get:
+      tags: [Messaging]
+      summary: Get conversation by ID
+      description: Retrieves details of a specific conversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Conversation'
+        404:
+          description: Conversation not found
+  
+  /messaging/conversations/{id}/read:
+    put:
+      tags: [Messaging]
+      summary: Mark conversation as read
+      description: Updates the last read timestamp for a conversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Message'
+              type: object
+              required: [messageId]
+              properties:
+                messageId:
+                  type: string
+                  format: uuid
+                  description: ID of the last read message
+      responses:
+        200:
+          description: Conversation marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        404:
+          description: Conversation not found
+
+  /messaging/conversations/{conversationId}/messages:
+    post:
+      tags: [Messaging]
+      summary: Send message
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
       responses:
         201:
           description: Message sent
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Message' 
+                $ref: '#/components/schemas/Message'
+    
+    get:
+      tags: [Messaging]
+      summary: Get conversation messages
+      description: Retrieves all messages in a conversation
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+        404:
+          description: Conversation not found
+
+  /messaging/messages/{messageId}:
+    get:
+      tags: [Messaging]
+      summary: Get message by ID
+      description: Retrieves a specific message with its attachments
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Message details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Message'
+        404:
+          description: Message not found
+
+  /messaging/notifications:
+    get:
+      tags: [Messaging]
+      summary: Get user notifications
+      description: Retrieves notifications for the authenticated user
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        200:
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+    
+    delete:
+      tags: [Messaging]
+      summary: Clear all notifications
+      description: Deletes all notifications for the authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Notifications cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+
+  /messaging/notifications/{notificationId}/read:
+    put:
+      tags: [Messaging]
+      summary: Mark notification as read
+      description: Marks a specific notification as read
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        404:
+          description: Notification not found
+
+  /messaging/websocket/{connectionId}/messages:
+    get:
+      tags: [Messaging, WebSocket]
+      summary: Get websocket connection messages
+      description: Retrieves messages for a specific websocket connection
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: connectionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of websocket messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        content:
+                          type: string
+                        direction:
+                          type: string
+                          enum: [incoming, outgoing]
+                        timestamp:
+                          type: string
+                          format: date-time
+        404:
+          description: Connection not found
+
+components:
+  schemas:
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        lastMessage:
+          $ref: '#/components/schemas/Message'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        conversationId:
+          type: string
+          format: uuid
+        senderId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              fileUrl:
+                type: string
+                format: uri
+              fileName:
+                type: string
+              fileSize:
+                type: integer
+              mimeType:
+                type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [message, system, update]
+        data:
+          type: object
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time 

@@ -38,6 +38,48 @@ paths:
                 items:
                   $ref: '#/components/schemas/Project'
 
+  /projects/featured:
+    get:
+      tags: [Projects]
+      summary: Get featured projects
+      description: Retrieves all featured projects
+      responses:
+        200:
+          description: Featured projects list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+
+  /projects/all:
+    get:
+      tags: [Projects]
+      summary: Get all projects
+      description: Retrieves all projects regardless of status
+      responses:
+        200:
+          description: Complete projects list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+
   /projects/{projectId}/updates:
     post:
       tags: [Projects]
@@ -165,6 +207,82 @@ paths:
       responses:
         204:
           description: Project update deleted
+
+  /client/projects/{uuid}/updates:
+    get:
+      tags: [Projects, Client]
+      summary: Get updates for a client project
+      description: Retrieves all updates for a project the client has access to
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Project updates list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      project:
+                        type: object
+                        properties:
+                          uuid:
+                            type: string
+                            format: uuid
+                          title:
+                            type: string
+                      updates:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProjectUpdate'
+        403:
+          description: Forbidden - client does not have access to this project
+        404:
+          description: Project not found
+
+  /client/projects/updates/{uuid}/viewed:
+    post:
+      tags: [Projects, Client]
+      summary: Mark project update as viewed
+      description: Marks a specific project update as viewed by the client
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Update marked as viewed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Update marked as viewed"
+        404:
+          description: Update not found
 
 components:
   schemas:
