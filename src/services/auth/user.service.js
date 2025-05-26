@@ -1,6 +1,6 @@
 const UserRepository = require('../../data/repositories/auth/UserRepository');
 const passwordUtil = require('../../utils/password.util');
-const { DuplicateResourceError } = require('../../utils/error.util');
+const { DuplicateResourceError, CustomError } = require('../../utils/error.util');
 
 class UserService {
   constructor() {

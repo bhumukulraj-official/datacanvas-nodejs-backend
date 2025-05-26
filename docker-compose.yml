@@ -42,6 +42,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-schemas.sql:/docker-entrypoint-initdb.d/init-schemas.sql
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
 
   redis:
     image: redis:6.2

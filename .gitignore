@@ -4,3 +4,6 @@ docker-guide.md
 node_modules
 .env
 *.md
+coverage/
+reports/
+logs/
